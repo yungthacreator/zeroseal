@@ -1,0 +1,7 @@
+[package]
+name = "zeroseal_spike"
+type = "bin"
+authors = ["ZeroSeal"]
+compiler_version = ">=1.0.0"
+
+[dependencies]
