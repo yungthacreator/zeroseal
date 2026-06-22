@@ -1,0 +1,9 @@
+program_id = "1001"
+snapshot_id = "42"
+impact_rule_id = "1"
+minimum_loss = "50"
+researcher_secret = "987654321"
+entitlement = "100"
+first_withdrawal = "100"
+second_withdrawal = "100"
+actor_is_privileged = false
