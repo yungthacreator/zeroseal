@@ -1,0 +1,189 @@
+#![no_std]
+
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env,
+};
+
+#[contracterror]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+    InvalidPublicInputLength = 2,
+    ZeroIdentifier = 3,
+    ProgramAlreadyExists = 4,
+    ProgramNotFound = 5,
+    ResearcherAlreadyRegistered = 6,
+    ResearcherNotRegistered = 7,
+    SnapshotMismatch = 8,
+    ImpactRuleMismatch = 9,
+    MinimumLossMismatch = 10,
+    StateCommitmentMismatch = 11,
+    ResearcherCommitmentMismatch = 12,
+    ZeroNullifier = 13,
+    NullifierAlreadyUsed = 14,
+    VerifierRejected = 15,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramConfig {
+    pub owner: Address,
+    pub program_id: BytesN<32>,
+    pub snapshot_id: BytesN<32>,
+    pub impact_rule_id: BytesN<32>,
+    pub minimum_loss: BytesN<32>,
+    pub state_commitment: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DecodedClaim {
+    pub program_id: BytesN<32>,
+    pub snapshot_id: BytesN<32>,
+    pub impact_rule_id: BytesN<32>,
+    pub minimum_loss: BytesN<32>,
+    pub state_commitment: BytesN<32>,
+    pub researcher_commitment: BytesN<32>,
+    pub nullifier: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ResearcherRecord {
+    commitment: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum DataKey {
+    Verifier,
+    Program(BytesN<32>),
+    Researcher(Address),
+    Nullifier(BytesN<32>),
+}
+
+#[contract]
+pub struct ClaimRegistry;
+
+#[contractimpl]
+impl ClaimRegistry {
+    pub fn __constructor(env: Env, verifier: Address) {
+        if env.storage().instance().has(&DataKey::Verifier) {
+            panic_with_error(&env, Error::AlreadyInitialized);
+        }
+        env.storage().instance().set(&DataKey::Verifier, &verifier);
+    }
+
+    pub fn verifier(env: Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&DataKey::Verifier)
+            .expect("verifier not initialized")
+    }
+
+    pub fn register_program(
+        env: Env,
+        owner: Address,
+        program_id: BytesN<32>,
+        snapshot_id: BytesN<32>,
+        impact_rule_id: BytesN<32>,
+        minimum_loss: BytesN<32>,
+        state_commitment: BytesN<32>,
+    ) -> Result<(), Error> {
+        owner.require_auth();
+        ensure_nonzero_bytes(&env, &program_id)?;
+        ensure_nonzero_bytes(&env, &snapshot_id)?;
+        ensure_nonzero_bytes(&env, &impact_rule_id)?;
+        ensure_nonzero_bytes(&env, &minimum_loss)?;
+        ensure_nonzero_bytes(&env, &state_commitment)?;
+
+        let key = DataKey::Program(program_id.clone());
+        if env.storage().instance().has(&key) {
+            return Err(Error::ProgramAlreadyExists);
+        }
+
+        env.storage().instance().set(
+            &key,
+            &ProgramConfig {
+                owner,
+                program_id,
+                snapshot_id,
+                impact_rule_id,
+                minimum_loss,
+                state_commitment,
+            },
+        );
+        Ok(())
+    }
+
+    pub fn get_program(env: Env, program_id: BytesN<32>) -> Result<ProgramConfig, Error> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Program(program_id))
+            .ok_or(Error::ProgramNotFound)
+    }
+
+    pub fn register_researcher(
+        env: Env,
+        researcher: Address,
+        researcher_commitment: BytesN<32>,
+    ) -> Result<(), Error> {
+        researcher.require_auth();
+        ensure_nonzero_bytes(&env, &researcher_commitment)?;
+
+        let key = DataKey::Researcher(researcher.clone());
+        if env.storage().instance().has(&key) {
+            return Err(Error::ResearcherAlreadyRegistered);
+        }
+
+        env.storage().instance().set(
+            &key,
+            &ResearcherRecord {
+                commitment: researcher_commitment,
+            },
+        );
+        Ok(())
+    }
+
+    pub fn get_researcher_commitment(env: Env, researcher: Address) -> Result<BytesN<32>, Error> {
+        env.storage()
+            .instance()
+            .get::<_, ResearcherRecord>(&DataKey::Researcher(researcher))
+            .map(|record| record.commitment)
+            .ok_or(Error::ResearcherNotRegistered)
+    }
+
+    pub fn decode_public_inputs(env: Env, public_inputs: Bytes) -> Result<DecodedClaim, Error> {
+        if public_inputs.len() != 224 {
+            return Err(Error::InvalidPublicInputLength);
+        }
+
+        Ok(DecodedClaim {
+            program_id: decode_field(&env, &public_inputs, 0),
+            snapshot_id: decode_field(&env, &public_inputs, 32),
+            impact_rule_id: decode_field(&env, &public_inputs, 64),
+            minimum_loss: decode_field(&env, &public_inputs, 96),
+            state_commitment: decode_field(&env, &public_inputs, 128),
+            researcher_commitment: decode_field(&env, &public_inputs, 160),
+            nullifier: decode_field(&env, &public_inputs, 192),
+        })
+    }
+}
+
+fn decode_field(env: &Env, bytes: &Bytes, offset: u32) -> BytesN<32> {
+    let mut raw = [0u8; 32];
+    bytes.slice(offset..offset + 32).copy_into_slice(&mut raw);
+    BytesN::from_array(env, &raw)
+}
+
+fn ensure_nonzero_bytes(_env: &Env, value: &BytesN<32>) -> Result<(), Error> {
+    if value.to_array().iter().all(|b| *b == 0) {
+        return Err(Error::ZeroIdentifier);
+    }
+    Ok(())
+}
+
+fn panic_with_error(env: &Env, error: Error) -> ! {
+    env.panic_with_error(error)
+}

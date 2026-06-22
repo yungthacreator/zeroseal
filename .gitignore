@@ -46,3 +46,6 @@ Thumbs.db
 
 # Noir private witness files
 **/Prover.toml
+
+# Soroban generated test snapshots
+**/test_snapshots/
