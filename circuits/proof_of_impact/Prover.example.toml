@@ -1,0 +1,5 @@
+entitlement = "100"
+first_withdrawal = "100"
+second_withdrawal = "100"
+actor_is_privileged = false
+minimum_loss = "50"

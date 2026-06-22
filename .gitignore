@@ -43,3 +43,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Noir private witness files
+**/Prover.toml
