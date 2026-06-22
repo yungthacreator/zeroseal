@@ -1,7 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env,
+    contract, contractclient, contracterror, contractevent, contractimpl, contracttype, Address,
+    Bytes, BytesN, Env,
 };
 
 #[contracterror]
@@ -23,6 +24,21 @@ pub enum Error {
     ZeroNullifier = 13,
     NullifierAlreadyUsed = 14,
     VerifierRejected = 15,
+    ClaimNotFound = 16,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimReceipt {
+    pub program_id: BytesN<32>,
+    pub researcher: Address,
+    pub snapshot_id: BytesN<32>,
+    pub impact_rule_id: BytesN<32>,
+    pub minimum_loss: BytesN<32>,
+    pub state_commitment: BytesN<32>,
+    pub researcher_commitment: BytesN<32>,
+    pub nullifier: BytesN<32>,
+    pub accepted_ledger: u32,
 }
 
 #[contracttype]
@@ -60,7 +76,27 @@ enum DataKey {
     Verifier,
     Program(BytesN<32>),
     Researcher(Address),
-    Nullifier(BytesN<32>),
+    UsedNullifier(BytesN<32>),
+    Receipt(BytesN<32>),
+}
+
+#[contractclient(name = "VerifierClient")]
+pub trait Verifier {
+    fn verify_proof(env: Env, public_inputs: Bytes, proof_bytes: Bytes);
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimAccepted {
+    pub program_id: BytesN<32>,
+    pub researcher: Address,
+    pub snapshot_id: BytesN<32>,
+    pub impact_rule_id: BytesN<32>,
+    pub minimum_loss: BytesN<32>,
+    pub state_commitment: BytesN<32>,
+    pub researcher_commitment: BytesN<32>,
+    pub nullifier: BytesN<32>,
+    pub accepted_ledger: u32,
 }
 
 #[contract]
@@ -168,6 +204,95 @@ impl ClaimRegistry {
             researcher_commitment: decode_field(&env, &public_inputs, 160),
             nullifier: decode_field(&env, &public_inputs, 192),
         })
+    }
+
+    pub fn submit_claim(
+        env: Env,
+        researcher: Address,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
+    ) -> Result<ClaimReceipt, Error> {
+        researcher.require_auth();
+
+        let decoded = Self::decode_public_inputs(env.clone(), public_inputs.clone())?;
+        if decoded.nullifier.to_array().iter().all(|b| *b == 0) {
+            return Err(Error::ZeroNullifier);
+        }
+
+        let program = Self::get_program(env.clone(), decoded.program_id.clone())?;
+        if program.snapshot_id != decoded.snapshot_id {
+            return Err(Error::SnapshotMismatch);
+        }
+        if program.impact_rule_id != decoded.impact_rule_id {
+            return Err(Error::ImpactRuleMismatch);
+        }
+        if program.minimum_loss != decoded.minimum_loss {
+            return Err(Error::MinimumLossMismatch);
+        }
+        if program.state_commitment != decoded.state_commitment {
+            return Err(Error::StateCommitmentMismatch);
+        }
+
+        let researcher_commitment =
+            Self::get_researcher_commitment(env.clone(), researcher.clone())?;
+        if researcher_commitment != decoded.researcher_commitment {
+            return Err(Error::ResearcherCommitmentMismatch);
+        }
+
+        let nullifier_key = DataKey::UsedNullifier(decoded.nullifier.clone());
+        if env.storage().instance().has(&nullifier_key) {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+
+        let verifier = VerifierClient::new(&env, &Self::verifier(env.clone()));
+        match verifier.try_verify_proof(&public_inputs, &proof_bytes) {
+            Ok(Ok(())) => {}
+            _ => return Err(Error::VerifierRejected),
+        }
+
+        let receipt = ClaimReceipt {
+            program_id: decoded.program_id,
+            researcher,
+            snapshot_id: decoded.snapshot_id,
+            impact_rule_id: decoded.impact_rule_id,
+            minimum_loss: decoded.minimum_loss,
+            state_commitment: decoded.state_commitment,
+            researcher_commitment,
+            nullifier: decoded.nullifier.clone(),
+            accepted_ledger: env.ledger().sequence(),
+        };
+
+        env.storage().instance().set(&nullifier_key, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::Receipt(receipt.nullifier.clone()), &receipt);
+        ClaimAccepted {
+            program_id: receipt.program_id.clone(),
+            researcher: receipt.researcher.clone(),
+            snapshot_id: receipt.snapshot_id.clone(),
+            impact_rule_id: receipt.impact_rule_id.clone(),
+            minimum_loss: receipt.minimum_loss.clone(),
+            state_commitment: receipt.state_commitment.clone(),
+            researcher_commitment: receipt.researcher_commitment.clone(),
+            nullifier: receipt.nullifier.clone(),
+            accepted_ledger: receipt.accepted_ledger,
+        }
+        .publish(&env);
+
+        Ok(receipt)
+    }
+
+    pub fn get_claim(env: Env, nullifier: BytesN<32>) -> Result<ClaimReceipt, Error> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Receipt(nullifier))
+            .ok_or(Error::ClaimNotFound)
+    }
+
+    pub fn is_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {
+        env.storage()
+            .instance()
+            .has(&DataKey::UsedNullifier(nullifier))
     }
 }
 
