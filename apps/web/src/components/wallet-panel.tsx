@@ -44,12 +44,12 @@ export function WalletPanel() {
               <dd>Freighter</dd>
             </div>
             <div>
-              <dt>Current frontend support</dt>
-              <dd>Connection and network detection</dd>
+              <dt>Network</dt>
+              <dd>Stellar Testnet</dd>
             </div>
             <div>
-              <dt>Next integration step</dt>
-              <dd>Wallet-signed claim transactions</dd>
+              <dt>Signing</dt>
+              <dd>Reviewed securely in Freighter</dd>
             </div>
           </dl>
         </div>
@@ -96,7 +96,7 @@ export function WalletPanel() {
                   className="btn btn--outline-light btn--terminal"
                   onClick={clearSession}
                 >
-                  Clear session
+                  Disconnect wallet
                 </button>
               )}
             </div>

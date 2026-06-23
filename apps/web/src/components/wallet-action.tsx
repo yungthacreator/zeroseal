@@ -18,7 +18,7 @@ export function WalletAction() {
           className="btn btn--ghost btn--sm"
           onClick={clearSession}
         >
-          Clear session
+          Disconnect wallet
         </button>
         <span className="visually-hidden" aria-live="polite">
           Stellar account connected.

@@ -14,6 +14,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -43,6 +44,8 @@ type WalletContextValue = {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
+const AUTO_RESTORE_KEY = "zeroseal:wallet-auto-restore";
+
 function walletErrorMessage(error: unknown): string {
   if (
     typeof error === "object" &&
@@ -61,6 +64,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<WalletNetwork | null>(null);
   const [status, setStatus] = useState<WalletState>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  const restoringRef = useRef(false);
 
   const refreshNetwork = useCallback(async () => {
     const details = await getNetworkDetails();
@@ -123,9 +128,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw new Error("Freighter returned no active account.");
       }
 
-      setAddress(connectedAddress);
       await refreshNetwork();
+
+      setAddress(connectedAddress);
       setStatus("connected");
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(AUTO_RESTORE_KEY, "enabled");
+      }
     } catch (caught) {
       setAddress(null);
       setNetwork(null);
@@ -134,12 +144,107 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshNetwork]);
 
+  const restoreSession = useCallback(async (): Promise<boolean> => {
+    if (restoringRef.current) {
+      return false;
+    }
+
+    restoringRef.current = true;
+
+    try {
+      const connection = await isConnected();
+
+      if (connection.error || !connection.isConnected) {
+        return false;
+      }
+
+      const permission = await isAllowed();
+
+      if (permission.error || !permission.isAllowed) {
+        return false;
+      }
+
+      const current = await getAddress();
+
+      if (current.error || !current.address) {
+        return false;
+      }
+
+      await refreshNetwork();
+
+      setAddress(current.address);
+      setError(null);
+      setStatus("connected");
+
+      return true;
+    } catch {
+      // Firefox may still be injecting the Freighter bridge.
+      // Silent failure keeps manual connection available.
+      return false;
+    } finally {
+      restoringRef.current = false;
+    }
+  }, [refreshNetwork]);
+
   const clearSession = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(AUTO_RESTORE_KEY, "disabled");
+    }
+
     setAddress(null);
     setNetwork(null);
     setStatus("idle");
     setError(null);
   }, []);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      address ||
+      status !== "idle" ||
+      window.localStorage.getItem(AUTO_RESTORE_KEY) !== "enabled"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | null = null;
+    let attempt = 0;
+
+    const delays = [700, 1600, 3000];
+
+    const runRestore = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      const restored = await restoreSession();
+
+      if (restored || cancelled) {
+        return;
+      }
+
+      attempt += 1;
+
+      if (attempt < delays.length) {
+        timer = window.setTimeout(() => {
+          void runRestore();
+        }, delays[attempt]);
+      }
+    };
+
+    timer = window.setTimeout(() => {
+      void runRestore();
+    }, delays[0]);
+
+    return () => {
+      cancelled = true;
+
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [address, status, restoreSession]);
 
   useEffect(() => {
     if (status !== "connected") {
