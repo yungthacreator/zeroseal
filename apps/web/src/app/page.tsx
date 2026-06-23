@@ -105,7 +105,7 @@ export default function Home() {
               <h1 className="display display--xl">
                 Prove what matters.
                 <br />
-                Reveal nothing else.
+                <em className="display-accent">Reveal nothing else.</em>
               </h1>
               <p className="hero__subhead">
                 ZeroSeal enables a security researcher to prove that private
@@ -168,7 +168,7 @@ export default function Home() {
               <div>
                 <p className="eyebrow">How it works</p>
                 <h2 className="display display--lg">
-                  Private computation. Public verification.
+                  Private computation. <em className="display-accent">Public verification.</em>
                 </h2>
               </div>
               <p className="section-head__sub">
@@ -194,7 +194,7 @@ export default function Home() {
             <div className="privacy__head">
               <p className="eyebrow eyebrow--gold">Disclosure boundary</p>
               <h2 className="display display--lg">
-                What stays private. What becomes verifiable.
+                What stays private. <em className="display-accent">What becomes verifiable.</em>
               </h2>
             </div>
 
@@ -304,7 +304,7 @@ export default function Home() {
             <div>
               <p className="eyebrow">ZeroSeal</p>
               <h2 className="display display--lg">
-                Prove the claim. Keep the evidence private.
+                Prove the claim. <em className="display-accent">Keep the evidence private.</em>
               </h2>
             </div>
             <a className="btn btn--yellow" href="#wallet">
