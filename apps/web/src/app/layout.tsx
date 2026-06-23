@@ -4,9 +4,10 @@ import { WalletProvider } from "@/context/wallet-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ZeroSeal",
+  title: "ZeroSeal | Real-world zero-knowledge claims on Stellar",
   description:
-    "Privacy-preserving proofs for responsible disclosure and selective claims.",
+    "ZeroSeal converts private evidence into a zero-knowledge proof, verifies it through Soroban, and records only a replay-resistant public receipt on Stellar.",
+  applicationName: "ZeroSeal",
 };
 
 export default function RootLayout({
@@ -17,6 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
         <WalletProvider>{children}</WalletProvider>
       </body>
     </html>

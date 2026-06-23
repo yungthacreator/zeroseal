@@ -1,0 +1,14 @@
+<svg width="232" height="44" viewBox="0 0 232 44" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ZeroSeal">
+  <title>ZeroSeal</title>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <path d="M24.3 7.8 L33.1 12.0" />
+    <path d="M35.4 14.0 L37.9 24.8" />
+    <path d="M37.3 27.2 L30.4 36.1" />
+    <path d="M28.1 37.2 L17.0 37.2" />
+    <path d="M14.7 36.1 L7.8 27.2" />
+    <path d="M7.3 24.8 L9.7 14.0" />
+    <path d="M12.0 12.0 L20.8 7.8" />
+  </g>
+  <path fill="currentColor" fill-rule="evenodd" d="M13.0 22 a9.6 9.6 0 1 0 19.2 0 a9.6 9.6 0 1 0 -19.2 0 Z M18.0 17.6 L27.2 17.6 L27.2 19.8 L20.6 24.4 L27.2 24.4 L27.2 26.6 L18.0 26.6 L18.0 24.4 L24.6 19.8 L18.0 19.8 Z" />
+  <text x="50" y="30" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="23" font-weight="700" letter-spacing="2.4" fill="currentColor">ZEROSEAL</text>
+</svg>

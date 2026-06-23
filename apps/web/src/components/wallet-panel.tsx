@@ -1,92 +1,141 @@
 "use client";
 
-import { readPublicStellarConfig } from "@/lib/stellar/config";
 import { useWallet } from "@/context/wallet-context";
-
-function shortenAddress(address: string): string {
-  return `${address.slice(0, 8)}…${address.slice(-8)}`;
-}
+import { readPublicStellarConfig } from "@/lib/stellar/config";
+import { shortenAddress } from "@/lib/presentation";
 
 export function WalletPanel() {
   const config = readPublicStellarConfig();
   const { address, network, status, error, connect, clearSession } =
     useWallet();
 
-  const networkMatches =
-    config.configured &&
+  const configured = config.configured;
+  const matches =
+    configured &&
     network?.networkPassphrase === config.value.networkPassphrase;
 
+  const walletState =
+    status === "unavailable"
+      ? "unavailable"
+      : status === "connecting"
+        ? "connecting"
+        : address
+          ? "connected"
+          : "not connected";
+
+  const networkState = network?.network ?? "not detected";
+  const verifierState = configured ? "configured" : "not configured";
+  const registryState = configured ? "configured" : "not configured";
+
   return (
-    <section className="wallet-card" aria-labelledby="wallet-heading">
-      <div>
-        <p className="eyebrow">Stellar identity</p>
-        <h2 id="wallet-heading">Connect your wallet</h2>
-        <p className="muted">
-          ZeroSeal reads your public address and requests signatures through
-          Freighter. Secret keys never enter the application.
-        </p>
-      </div>
-
-      {!address ? (
-        <button
-          className="primary-button"
-          type="button"
-          onClick={() => void connect()}
-          disabled={status === "connecting"}
-        >
-          {status === "connecting" ? "Connecting…" : "Connect Freighter"}
-        </button>
-      ) : (
-        <div className="wallet-details">
-          <div className="detail-row">
-            <span>Account</span>
-            <strong title={address}>{shortenAddress(address)}</strong>
-          </div>
-
-          <div className="detail-row">
-            <span>Wallet network</span>
-            <strong>{network?.network || "Unknown"}</strong>
-          </div>
-
-          <div className="detail-row">
-            <span>Configuration</span>
-            <strong>
-              {!config.configured
-                ? "Not configured"
-                : networkMatches
-                  ? "Network matched"
-                  : "Wrong network"}
-            </strong>
-          </div>
-
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={clearSession}
-          >
-            Clear local session
-          </button>
-        </div>
-      )}
-
-      {error ? <p className="error-message">{error}</p> : null}
-
-      {!config.configured ? (
-        <div className="notice">
-          <strong>Runtime configuration required</strong>
-          <p>
-            Add the public RPC, network passphrase, verifier contract, and
-            registry contract to a private local environment file.
+    <section className="wallet-section panel panel--ink" id="wallet">
+      <div className="shell wallet">
+        <div className="wallet__intro">
+          <p className="eyebrow">Stellar account</p>
+          <h2 className="display display--wallet">Connect with Freighter</h2>
+          <p className="wallet__copy">
+            Freighter provides the public address and selected Stellar network.
+            ZeroSeal never requests or stores a secret key or seed phrase.
           </p>
-        </div>
-      ) : null}
 
-      {config.configured && address && !networkMatches ? (
-        <p className="error-message">
-          Switch Freighter to the configured ZeroSeal network before signing
-          any transaction.
-        </p>
-      ) : null}
+          <dl className="wallet__summary">
+            <div>
+              <dt>Wallet</dt>
+              <dd>Freighter</dd>
+            </div>
+            <div>
+              <dt>Current frontend support</dt>
+              <dd>Connection and network detection</dd>
+            </div>
+            <div>
+              <dt>Next integration step</dt>
+              <dd>Wallet-signed claim transactions</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="terminal" aria-label="ZeroSeal wallet terminal">
+          <div className="terminal__bar">
+            <div className="terminal__lights" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <span>zeroseal://stellar-session</span>
+          </div>
+
+          <div className="terminal__body">
+            <p className="terminal__command">
+              <span>$</span> zeroseal wallet status
+            </p>
+
+            <TerminalLine label="wallet" value={walletState} />
+            <TerminalLine label="network" value={networkState} />
+            <TerminalLine label="verifier" value={verifierState} />
+            <TerminalLine label="registry" value={registryState} />
+
+            {address ? (
+              <TerminalLine label="account" value={shortenAddress(address)} />
+            ) : null}
+
+            <div className="terminal__action">
+              {!address ? (
+                <button
+                  type="button"
+                  className="btn btn--yellow btn--terminal"
+                  onClick={() => void connect()}
+                  disabled={status === "connecting"}
+                >
+                  {status === "connecting"
+                    ? "Connecting..."
+                    : "Connect Freighter"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--outline-light btn--terminal"
+                  onClick={clearSession}
+                >
+                  Clear session
+                </button>
+              )}
+            </div>
+
+            {!configured ? (
+              <div className="terminal__notice" role="status">
+                <p>
+                  <span>!</span> runtime configuration required
+                </p>
+                <code>
+                  add RPC_URL, NETWORK_PASSPHRASE, VERIFIER_CONTRACT_ID and
+                  REGISTRY_CONTRACT_ID
+                </code>
+              </div>
+            ) : null}
+
+            {configured && address && !matches ? (
+              <p className="terminal__warning" role="alert">
+                Switch Freighter to the configured ZeroSeal network.
+              </p>
+            ) : null}
+
+            {error ? (
+              <p className="terminal__warning" role="alert">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
     </section>
+  );
+}
+
+function TerminalLine({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="terminal__line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </p>
   );
 }
