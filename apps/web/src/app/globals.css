@@ -2050,3 +2050,107 @@ main {
 }
 
 /* ZEROSEAL FINAL ITALIC POLISH END */
+
+/* ZEROSEAL FINAL MOBILE ALIGNMENT START */
+
+@media (max-width: 720px) {
+  /*
+   * Keep section backgrounds full width while centring every inner shell.
+   * Several content classes also set width: 100%, so these more-specific
+   * rules prevent them from overriding the intended mobile gutters.
+   */
+  .panel,
+  .wallet-section {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    overflow-x: hidden;
+  }
+
+  .panel > .shell,
+  .wallet-section > .shell,
+  .hero__visual > .shell,
+  .shell.privacy,
+  .shell.wallet,
+  .shell.stellar,
+  .shell.hero__lower,
+  .shell.final-cta__inner {
+    width: calc(100% - 40px) !important;
+    max-width: calc(100% - 40px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /*
+   * Make headings and supporting copy align to the same centred content
+   * column instead of touching the viewport edge.
+   */
+  .privacy__head,
+  .wallet__intro,
+  .section-head,
+  .section-head--split,
+  .stellar__intro,
+  .final-cta__inner {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .section-head--split,
+  .wallet,
+  .stellar__intro {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .wallet {
+    gap: 40px !important;
+  }
+
+  /*
+   * Keep all large interface blocks inside the centred shell.
+   */
+  .privacy__grid,
+  .pipeline,
+  .proof-lifecycle,
+  .case-showcase,
+  .case-showcase__body,
+  .wallet__summary,
+  .terminal,
+  .stellar__components,
+  .roadmap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .privacy__grid article {
+    padding: 30px 24px;
+  }
+
+  .wallet__copy,
+  .section-head__sub {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .terminal {
+    box-sizing: border-box;
+  }
+
+  /*
+   * Preserve readable word wrapping without splitting ordinary words.
+   */
+  .display--lg,
+  .display--wallet,
+  .privacy__head h2,
+  .wallet__intro h2,
+  .section-head h2 {
+    overflow-wrap: break-word !important;
+    word-break: normal !important;
+  }
+}
+
+/* ZEROSEAL FINAL MOBILE ALIGNMENT END */
