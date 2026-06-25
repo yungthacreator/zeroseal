@@ -4,9 +4,12 @@
 
 export type WalletStatus =
   | "idle"
-  | "connecting"
+  | "detecting"
+  | "requesting_access"
   | "connected"
   | "unavailable"
+  | "wrong_network"
+  | "rejected"
   | "error";
 
 export function shortenAddress(address: string): string {
@@ -27,10 +30,16 @@ export function walletStatusCopy(status: WalletStatus): StatusCopy {
   switch (status) {
     case "connected":
       return { label: "Account connected", tone: "good" };
-    case "connecting":
+    case "detecting":
+      return { label: "Detecting wallet", tone: "active" };
+    case "requesting_access":
       return { label: "Connecting", tone: "active" };
     case "unavailable":
       return { label: "Freighter unavailable", tone: "warn" };
+    case "wrong_network":
+      return { label: "Wrong network", tone: "danger" };
+    case "rejected":
+      return { label: "Connection cancelled", tone: "warn" };
     case "error":
       return { label: "Permission required", tone: "danger" };
     default:

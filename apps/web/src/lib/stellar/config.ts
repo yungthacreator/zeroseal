@@ -4,11 +4,17 @@ const contractId = z
   .string()
   .regex(/^C[A-Z2-7]{55}$/, "Must be a valid Stellar contract address");
 
+export const DEFAULT_REGISTRY_CONTRACT_ID =
+  "CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R";
+
+export const DEFAULT_VERIFIER_CONTRACT_ID =
+  "CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X";
+
 const publicConfigSchema = z.object({
   networkPassphrase: z.string().min(1, "Network passphrase is required"),
   rpcUrl: z.url("RPC URL must be valid"),
-  registryContractId: contractId,
-  verifierContractId: contractId,
+  registryContractId: contractId.default(DEFAULT_REGISTRY_CONTRACT_ID),
+  verifierContractId: contractId.default(DEFAULT_VERIFIER_CONTRACT_ID),
 });
 
 export type PublicStellarConfig = z.infer<typeof publicConfigSchema>;
@@ -31,9 +37,11 @@ export function readPublicStellarConfig(): StellarConfigResult {
       process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ?? "",
     rpcUrl: process.env.NEXT_PUBLIC_STELLAR_RPC_URL ?? "",
     registryContractId:
-      process.env.NEXT_PUBLIC_REGISTRY_CONTRACT_ID ?? "",
+      process.env.NEXT_PUBLIC_REGISTRY_CONTRACT_ID ??
+      DEFAULT_REGISTRY_CONTRACT_ID,
     verifierContractId:
-      process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ?? "",
+      process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ??
+      DEFAULT_VERIFIER_CONTRACT_ID,
   });
 
   if (!result.success) {

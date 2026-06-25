@@ -4,11 +4,10 @@ import { useState } from "react";
 import { WalletAction } from "@/components/wallet-action";
 
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: "#product", label: "Product" },
   { href: "#how-it-works", label: "How it works" },
   { href: "#use-cases", label: "Use cases" },
-  { href: "#stellar", label: "Built on Stellar" },
-  { href: "#roadmap", label: "Roadmap" },
+  { href: "#proof-workspace", label: "Proof workspace" },
+  { href: "#network-activity", label: "Network activity" },
 ];
 
 export function SiteHeader() {

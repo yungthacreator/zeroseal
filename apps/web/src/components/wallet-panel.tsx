@@ -17,15 +17,21 @@ export function WalletPanel() {
   const walletState =
     status === "unavailable"
       ? "unavailable"
-      : status === "connecting"
+      : status === "detecting" || status === "requesting_access"
         ? "connecting"
+        : status === "wrong_network"
+          ? "wrong network"
+          : status === "rejected"
+            ? "cancelled"
         : address
           ? "connected"
           : "not connected";
+  const connecting =
+    status === "detecting" || status === "requesting_access";
 
   const networkState = network?.network ?? "not detected";
-  const verifierState = configured ? "configured" : "not configured";
-  const registryState = configured ? "configured" : "not configured";
+  const verifierState = configured ? "ready" : "runtime pending";
+  const registryState = configured ? "ready" : "runtime pending";
 
   return (
     <section className="wallet-section panel panel--ink" id="wallet">
@@ -80,17 +86,20 @@ export function WalletPanel() {
 
             <div className="terminal__action">
               {!address ? (
+                  <>
                 <button
                   type="button"
                   className="btn btn--yellow btn--terminal"
                   onClick={() => void connect()}
-                  disabled={status === "connecting"}
+                  disabled={connecting}
                 >
-                  {status === "connecting"
+                  {connecting
                     ? "Connecting..."
                     : "Connect Freighter"}
                 </button>
-              ) : (
+
+                  </>
+                ) : (
                 <button
                   type="button"
                   className="btn btn--outline-light btn--terminal"
@@ -104,18 +113,17 @@ export function WalletPanel() {
             {!configured ? (
               <div className="terminal__notice" role="status">
                 <p>
-                  <span>!</span> runtime configuration required
+                  <span>!</span> runtime values pending
                 </p>
                 <code>
-                  add RPC_URL, NETWORK_PASSPHRASE, VERIFIER_CONTRACT_ID and
-                  REGISTRY_CONTRACT_ID
+                  add RPC URL, network passphrase, verifier ID and registry ID
                 </code>
               </div>
             ) : null}
 
             {configured && address && !matches ? (
               <p className="terminal__warning" role="alert">
-                Switch Freighter to the configured ZeroSeal network.
+                Switch Freighter to Stellar Testnet to continue.
               </p>
             ) : null}
 

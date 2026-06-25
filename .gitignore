@@ -29,7 +29,6 @@ vk.*
 *.bin
 
 # Rust / Node
-target/
 node_modules/
 dist/
 .next/
@@ -49,3 +48,20 @@ Thumbs.db
 
 # Soroban generated test snapshots
 **/test_snapshots/
+
+# ZeroSeal local-only state
+.deployment/
+.vercel/
+apps/web/.next/
+apps/web/.env.local
+*.before-wallet-restore
+
+# Local development files
+.local-backups/
+.backup/
+.backups/
+.scratch/
+.tmp/
+*.local
+*.bak
+*.backup

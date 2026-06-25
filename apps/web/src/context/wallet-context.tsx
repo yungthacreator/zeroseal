@@ -8,6 +8,7 @@ import {
   isConnected,
   requestAccess,
 } from "@stellar/freighter-api";
+import { StrKey } from "@stellar/stellar-sdk";
 import {
   createContext,
   useCallback,
@@ -21,9 +22,12 @@ import {
 
 type WalletState =
   | "idle"
-  | "connecting"
+  | "detecting"
+  | "requesting_access"
   | "connected"
   | "unavailable"
+  | "wrong_network"
+  | "rejected"
   | "error";
 
 type WalletNetwork = {
@@ -45,6 +49,20 @@ type WalletContextValue = {
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 const AUTO_RESTORE_KEY = "zeroseal:wallet-auto-restore";
+const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
+
+function isMobileBrowser(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent;
+
+  return (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent) ||
+    (/Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1)
+  );
+}
 
 function walletErrorMessage(error: unknown): string {
   if (
@@ -53,10 +71,49 @@ function walletErrorMessage(error: unknown): string {
     "message" in error &&
     typeof error.message === "string"
   ) {
-    return error.message;
+    const message = error.message;
+    const normalized = message.toLowerCase();
+
+    if (
+      normalized.includes("reject") ||
+      normalized.includes("declin") ||
+      normalized.includes("cancel") ||
+      normalized.includes("denied")
+    ) {
+      return "Wallet connection was cancelled.";
+    }
+
+    return message;
   }
 
   return "The wallet request could not be completed.";
+}
+
+function isRejectedError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message
+        : "";
+
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("reject") ||
+    normalized.includes("declin") ||
+    normalized.includes("cancel") ||
+    normalized.includes("denied")
+  );
+}
+
+function isTestnet(details: WalletNetwork): boolean {
+  return (
+    details.network?.toUpperCase() === "TESTNET" ||
+    details.networkPassphrase === TESTNET_PASSPHRASE
+  );
 }
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -66,6 +123,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const restoringRef = useRef(false);
+  const connectingRef = useRef(false);
 
   const refreshNetwork = useCallback(async () => {
     const details = await getNetworkDetails();
@@ -74,16 +132,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw new Error(details.error.message);
     }
 
-    setNetwork({
+    const nextNetwork = {
       network: details.network,
       networkPassphrase: details.networkPassphrase,
       networkUrl: details.networkUrl ?? null,
       sorobanRpcUrl: details.sorobanRpcUrl ?? null,
-    });
+    };
+
+    setNetwork(nextNetwork);
+
+    return nextNetwork;
   }, []);
 
   const connect = useCallback(async () => {
-    setStatus("connecting");
+    if (connectingRef.current) {
+      return;
+    }
+
+    connectingRef.current = true;
+    setStatus("detecting");
     setError(null);
 
     try {
@@ -98,6 +165,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      setStatus("requesting_access");
       const permission = await isAllowed();
 
       if (permission.error) {
@@ -128,7 +196,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw new Error("Freighter returned no active account.");
       }
 
-      await refreshNetwork();
+      if (!StrKey.isValidEd25519PublicKey(connectedAddress)) {
+        throw new Error("Freighter returned an invalid Stellar public key.");
+      }
+
+      const currentNetwork = await refreshNetwork();
+
+      if (!isTestnet(currentNetwork)) {
+        setAddress(null);
+        setStatus("wrong_network");
+        setError("Switch Freighter to Stellar Testnet to continue.");
+        return;
+      }
 
       setAddress(connectedAddress);
       setStatus("connected");
@@ -139,52 +218,76 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (caught) {
       setAddress(null);
       setNetwork(null);
-      setStatus("error");
+      setStatus(isRejectedError(caught) ? "rejected" : "error");
       setError(walletErrorMessage(caught));
-    }
-  }, [refreshNetwork]);
-
-  const restoreSession = useCallback(async (): Promise<boolean> => {
-    if (restoringRef.current) {
-      return false;
-    }
-
-    restoringRef.current = true;
-
-    try {
-      const connection = await isConnected();
-
-      if (connection.error || !connection.isConnected) {
-        return false;
-      }
-
-      const permission = await isAllowed();
-
-      if (permission.error || !permission.isAllowed) {
-        return false;
-      }
-
-      const current = await getAddress();
-
-      if (current.error || !current.address) {
-        return false;
-      }
-
-      await refreshNetwork();
-
-      setAddress(current.address);
-      setError(null);
-      setStatus("connected");
-
-      return true;
-    } catch {
-      // Firefox may still be injecting the Freighter bridge.
-      // Silent failure keeps manual connection available.
-      return false;
     } finally {
-      restoringRef.current = false;
+      connectingRef.current = false;
     }
   }, [refreshNetwork]);
+
+  const restoreSession = useCallback(
+    async (): Promise<boolean> => {
+      if (restoringRef.current) {
+        return false;
+      }
+
+      restoringRef.current = true;
+
+      try {
+        /*
+         * Automatic restoration must stay silent.
+         * isAllowed and getAddress do not request new permission.
+         * requestAccess remains exclusive to the manual Connect action.
+         */
+        const permission = await isAllowed();
+
+        if (permission.error || !permission.isAllowed) {
+          return false;
+        }
+
+        const current = await getAddress();
+
+        if (current.error || !current.address) {
+          return false;
+        }
+
+        if (!StrKey.isValidEd25519PublicKey(current.address)) {
+          return false;
+        }
+
+        const currentNetwork = await refreshNetwork();
+
+        if (!isTestnet(currentNetwork)) {
+          setAddress(null);
+          setStatus("wrong_network");
+          setError("Switch Freighter to Stellar Testnet to continue.");
+          return false;
+        }
+
+        setAddress(current.address);
+        setError(null);
+        setStatus("connected");
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            AUTO_RESTORE_KEY,
+            "enabled",
+          );
+        }
+
+        return true;
+      } catch {
+        /*
+         * Firefox may still be injecting the extension bridge.
+         * The restoration effect retries without showing an error.
+         */
+        return false;
+      } finally {
+        restoringRef.current = false;
+      }
+    },
+    [refreshNetwork],
+  );
 
   const clearSession = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -201,19 +304,46 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (
       typeof window === "undefined" ||
       address ||
-      status !== "idle" ||
-      window.localStorage.getItem(AUTO_RESTORE_KEY) !== "enabled"
+      status !== "idle"
+    ) {
+      return;
+    }
+
+    /*
+     * Explicit disconnect remains persistent.
+     * A successful manual connection changes this back to enabled.
+     */
+    if (
+      window.localStorage.getItem(AUTO_RESTORE_KEY) ===
+      "disabled"
     ) {
       return;
     }
 
     let cancelled = false;
     let timer: number | null = null;
-    let attempt = 0;
+    let attempts = 0;
 
-    const delays = [700, 1600, 3000];
+    const maximumAttempts = 3;
 
-    const runRestore = async () => {
+    if (isMobileBrowser() && !("freighter" in window)) {
+      timer = window.setTimeout(() => {
+        if (!cancelled) {
+          setStatus("unavailable");
+          setError("Wallet extension required.");
+        }
+      }, 450);
+
+      return () => {
+        cancelled = true;
+
+        if (timer !== null) {
+          window.clearTimeout(timer);
+        }
+      };
+    }
+
+    const attemptRestore = async () => {
       if (cancelled) {
         return;
       }
@@ -224,18 +354,49 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      attempt += 1;
+      attempts += 1;
 
-      if (attempt < delays.length) {
+      if (attempts < maximumAttempts) {
+        const delay = attempts < 3 ? 700 : 1400;
+
         timer = window.setTimeout(() => {
-          void runRestore();
-        }, delays[attempt]);
+          void attemptRestore();
+        }, delay);
+        return;
+      }
+
+      const connection = await isConnected();
+
+      if (!cancelled && (connection.error || !connection.isConnected)) {
+        setStatus("unavailable");
+        setError("Freighter is required");
       }
     };
 
     timer = window.setTimeout(() => {
-      void runRestore();
-    }, delays[0]);
+      void attemptRestore();
+    }, 350);
+
+    const retryOnFocus = () => {
+      if (!cancelled) {
+        void attemptRestore();
+      }
+    };
+
+    const retryWhenVisible = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !cancelled
+      ) {
+        void attemptRestore();
+      }
+    };
+
+    window.addEventListener("focus", retryOnFocus);
+    document.addEventListener(
+      "visibilitychange",
+      retryWhenVisible,
+    );
 
     return () => {
       cancelled = true;
@@ -243,6 +404,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (timer !== null) {
         window.clearTimeout(timer);
       }
+
+      window.removeEventListener(
+        "focus",
+        retryOnFocus,
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        retryWhenVisible,
+      );
     };
   }, [address, status, restoreSession]);
 
@@ -269,14 +440,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setAddress(nextAddress);
-
-        setNetwork((current) => ({
+        const nextWalletNetwork = {
           network: nextNetwork,
           networkPassphrase,
+          networkUrl: null,
+          sorobanRpcUrl: null,
+        };
+
+        setNetwork((current) => ({
+          ...nextWalletNetwork,
           networkUrl: current?.networkUrl ?? null,
           sorobanRpcUrl: current?.sorobanRpcUrl ?? null,
         }));
+
+        if (!isTestnet(nextWalletNetwork)) {
+          setAddress(null);
+          setStatus("wrong_network");
+          setError("Switch Freighter to Stellar Testnet to continue.");
+          return;
+        }
+
+        setAddress(nextAddress);
+        setError(null);
+        setStatus("connected");
       },
     );
 

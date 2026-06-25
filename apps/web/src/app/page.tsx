@@ -1,92 +1,64 @@
+import { BusinessModelCarousel } from "@/components/business-model-carousel";
+import { HeroActions } from "@/components/hero-actions";
+import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
+import { OnChainActivity } from "@/components/on-chain-activity";
+import { ProductStatusTerminal } from "@/components/product-status-terminal";
+import { ResearcherRegistration } from "@/components/researcher-registration";
 import { SiteHeader } from "@/components/site-header";
-import { UseCaseSequence } from "@/components/use-case-sequence";
-import { WalletPanel } from "@/components/wallet-panel";
+import { StellarActivity } from "@/components/stellar-activity";
+import { UseCaseEngine } from "@/components/use-case-engine";
+import { shortenAddress } from "@/lib/presentation";
+import { explorerContractUrl } from "@/lib/stellar/testnet";
+import {
+  DEFAULT_REGISTRY_CONTRACT_ID,
+  DEFAULT_VERIFIER_CONTRACT_ID,
+} from "@/lib/stellar/config";
 
-const PIPELINE = [
-  {
-    number: "01",
-    title: "Prepare the witness",
-    body: "Sensitive evidence remains on the prover device.",
-  },
-  {
-    number: "02",
-    title: "Bind the claim",
-    body: "Pedersen commitments bind the researcher, snapshot, rule, and threshold.",
-  },
-  {
-    number: "03",
-    title: "Generate the proof",
-    body: "A Noir circuit produces an UltraHonk proof with seven public inputs.",
-  },
-  {
-    number: "04",
-    title: "Verify on Stellar",
-    body: "Soroban verifies the proof and rejects altered claims.",
-  },
-  {
-    number: "05",
-    title: "Record the receipt",
-    body: "The Claim Registry stores the accepted public claim.",
-  },
-  {
-    number: "06",
-    title: "Prevent replay",
-    body: "A used nullifier cannot be accepted as a new claim.",
-  },
+const registryContractId =
+  process.env.NEXT_PUBLIC_REGISTRY_CONTRACT_ID ?? DEFAULT_REGISTRY_CONTRACT_ID;
+
+const verifierContractId =
+  process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ?? DEFAULT_VERIFIER_CONTRACT_ID;
+
+const TECH_PIPELINE = [
+  "Noir circuit",
+  "UltraHonk proof",
+  "Soroban verifier",
+  "Claim Registry",
+  "Replay-protected receipt",
 ] as const;
 
 const PRIVATE_ITEMS = [
-  "Exploit details",
-  "Researcher secret",
-  "Private values",
-  "Complete witness",
+  "exploit details",
+  "reproduction steps",
+  "sensitive code paths",
+  "researcher secret",
+  "private values",
+  "complete witness",
 ] as const;
 
-const PUBLIC_ITEMS = [
-  "Programme and snapshot identifiers",
-  "Impact rule and public threshold",
-  "State and researcher commitments",
-  "Nullifier and accepted receipt",
+const VERIFIABLE_ITEMS = [
+  "programme identifier",
+  "snapshot identifier",
+  "impact rule",
+  "public threshold",
+  "researcher commitment",
+  "nullifier",
+  "accepted receipt",
+  "transaction hash",
 ] as const;
 
-const LIFECYCLE = [
-  "Programme registered",
-  "Researcher commitment registered",
-  "Private proof accepted",
-  "Public receipt recorded",
-  "Duplicate nullifier rejected",
-  "Original receipt preserved",
+const FOOTER_PRODUCT_LINKS = [
+  { label: "Use cases", href: "#use-cases" },
+  { label: "Proof workspace", href: "#proof-workspace" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "Network activity", href: "#network-activity" },
 ] as const;
 
-const STELLAR_COMPONENTS = [
-  {
-    title: "Soroban",
-    body: "Verifies the UltraHonk proof and executes the Claim Registry.",
-  },
-  {
-    title: "Freighter",
-    body: "Provides account access and network detection in the current frontend.",
-  },
-  {
-    title: "Stellar ledger",
-    body: "Stores accepted public receipts and replay-resistant nullifiers.",
-  },
-] as const;
-
-const NOW = [
-  "Noir Security Impact circuit",
-  "UltraHonk proof generation",
-  "Pedersen commitment binding",
-  "Soroban verifier",
-  "Claim Registry",
-  "Replay protection",
-] as const;
-
-const NEXT = [
-  "Stellar Testnet deployment",
-  "Wallet-signed claim submission",
-  "Public receipt explorer",
-  "Confidential token policy proofs",
+const FOOTER_DEVELOPER_LINKS = [
+  { label: "Registry contract", href: explorerContractUrl(registryContractId) },
+  { label: "Verifier contract", href: explorerContractUrl(verifierContractId) },
+  { label: "Official Freighter", href: "https://freighter.app/" },
 ] as const;
 
 export default function Home() {
@@ -95,230 +67,188 @@ export default function Home() {
       <SiteHeader />
 
       <main>
-        <section className="hero panel panel--cream" id="product">
-          <div className="hero__visual">
-            <div className="hero__dots" aria-hidden="true" />
-            <div className="shell hero__headline">
-              <p className="eyebrow eyebrow--gold">
-                Real-world zero-knowledge claims on Stellar
-              </p>
-              <h1 className="display display--xl">
-                Prove what matters.
-                <br />
-                <em className="display-accent">Reveal nothing else.</em>
-              </h1>
-              <p className="hero__subhead">
-                ZeroSeal enables a security researcher to prove that private
-                vulnerability evidence satisfies a public impact threshold
-                without disclosing exploit details or the complete witness.
-                Soroban verifies the proof and the Claim Registry records a
-                replay-resistant receipt.
-              </p>
-            </div>
-          </div>
-
-          <div className="shell hero__lower">
-            <div className="application-rail">
-              <div className="application-rail__label">
-                <p>Applications</p>
-                <span>Selective disclosure across sensitive claims</span>
-              </div>
-
-              <ol
-                className="application-rail__items"
-                aria-label="ZeroSeal applications"
-              >
-                <li>
-                  <span>01</span>
-                  <strong>Responsible disclosure</strong>
-                  <small>Current proof</small>
-                </li>
-                <li>
-                  <span>02</span>
-                  <strong>Financial thresholds</strong>
-                  <small>Future application</small>
-                </li>
-                <li>
-                  <span>03</span>
-                  <strong>Wallet control</strong>
-                  <small>Future application</small>
-                </li>
-                <li>
-                  <span>04</span>
-                  <strong>Policy attestations</strong>
-                  <small>Future application</small>
-                </li>
+        <section className="hero" id="hero">
+          <div className="shell hero__inner">
+            <p className="eyebrow">
+              Real-world zero-knowledge claims on Stellar
+            </p>
+            <h1 className="display display--hero hero__headline">
+              Prove what matters.
+              <br />
+              <em>Reveal nothing else.</em>
+            </h1>
+            <p className="lede hero__lede">
+              ZeroSeal lets security researchers prove that private
+              vulnerability evidence satisfies a public impact rule. The
+              witness remains on the researcher&apos;s device while Soroban
+              verifies the proof and Stellar records the result.
+            </p>
+            <HeroActions />
+            <div className="tech-pipeline" aria-label="Technical pipeline">
+              <ol>
+                {TECH_PIPELINE.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
               </ol>
-            </div>
-
-            <div className="hero__actions">
-              <a className="btn btn--solid" href="#wallet">
-                Connect Freighter
-              </a>
-              <a className="btn btn--outline" href="#how-it-works">
-                See how it works
-              </a>
+              <p>
+                <span aria-hidden="true" />
+                Running on Stellar Testnet
+              </p>
             </div>
           </div>
         </section>
 
-        <section className="panel panel--ink" id="how-it-works">
+        <section className="section section--dotted" id="how-it-works">
           <div className="shell">
-            <header className="section-head section-head--split section-head--light">
+            <header className="section__head section__head--split">
               <div>
                 <p className="eyebrow">How it works</p>
                 <h2 className="display display--lg">
-                  Private computation. <em className="display-accent">Public verification.</em>
+                  Private witness. Public verification.
                 </h2>
               </div>
-              <p className="section-head__sub">
-                The witness stays local. Only the proof and claim-bound public
-                inputs cross the verification boundary.
+              <p className="lede">
+                ZeroSeal separates local witness material from the public
+                inputs and receipts required to verify a security-impact claim.
               </p>
             </header>
 
-            <ol className="pipeline" aria-label="ZeroSeal proof pipeline">
-              {PIPELINE.map((stage) => (
-                <li key={stage.number}>
-                  <span>{stage.number}</span>
-                  <h3>{stage.title}</h3>
-                  <p>{stage.body}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-
-        <section className="panel panel--cream" id="privacy">
-          <div className="shell privacy">
-            <div className="privacy__head">
-              <p className="eyebrow eyebrow--gold">Disclosure boundary</p>
-              <h2 className="display display--lg">
-                What stays private. <em className="display-accent">What becomes verifiable.</em>
-              </h2>
-            </div>
-
-            <div className="privacy__grid">
-              <article>
-                <h3>Private</h3>
-                <ul>
-                  {PRIVATE_ITEMS.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="privacy__public">
-                <h3>Verifiable</h3>
-                <ul>
-                  {PUBLIC_ITEMS.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-            </div>
-
-            <div className="proof-lifecycle">
-              <div className="proof-lifecycle__head">
-                <div>
-                  <p className="eyebrow eyebrow--gold">Proof lifecycle</p>
-                  <h3>Accepted once. Replayed never.</h3>
-                </div>
-                <p>
-                  The protocol records the accepted claim, rejects a reused
-                  nullifier, and preserves the original receipt.
-                </p>
+            <div className="how-disclosure">
+              <HowItWorksTerminal />
+              <div className="compare compare--compact">
+                <section className="compare__col compare__col--private">
+                  <h3>REMAINS PRIVATE</h3>
+                  <ul>
+                    {PRIVATE_ITEMS.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section className="compare__col compare__col--verifiable">
+                  <h3>PUBLICLY VERIFIABLE</h3>
+                  <ul>
+                    {VERIFIABLE_ITEMS.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
               </div>
-
-              <ol>
-                {LIFECYCLE.map((item, index) => (
-                  <li key={item}>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <strong>{item}</strong>
-                  </li>
-                ))}
-              </ol>
             </div>
           </div>
         </section>
 
-        <UseCaseSequence />
+        <section className="section section--cream" id="use-cases">
+          <div className="shell">
+            <UseCaseEngine />
+          </div>
+        </section>
 
-        <WalletPanel />
+        <ResearcherRegistration />
 
-        <section className="panel panel--yellow" id="stellar">
-          <div className="shell stellar">
-            <div className="stellar__intro">
+        <OnChainActivity />
+
+        <section className="section section--cream" id="network-activity">
+          <div className="shell">
+            <header className="section__head section__head--split">
               <div>
-                <p className="eyebrow">Proudly built on Stellar</p>
+                <p className="eyebrow">Network activity</p>
                 <h2 className="display display--lg">
-                  The public verification and receipt layer
+                  Real state, visible on Stellar
                 </h2>
               </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="stellar__wordmark"
-                src="/stellar-wordmark.svg"
-                alt="Stellar"
-              />
-            </div>
-
-            <div className="stellar__components">
-              {STELLAR_COMPONENTS.map((component) => (
-                <article key={component.title}>
-                  <h3>{component.title}</h3>
-                  <p>{component.body}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="roadmap" id="roadmap">
-              <article>
-                <p className="roadmap__label">Now</p>
-                <ul>
-                  {NOW.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-              <article>
-                <p className="roadmap__label">Next</p>
-                <ul>
-                  {NEXT.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-            </div>
-
-            <p className="stellar__disclaimer">
-              ZeroSeal is independently built for the Stellar ecosystem. This
-              does not imply endorsement, partnership, funding, or official
-              affiliation with the Stellar Development Foundation.
-            </p>
+              <p className="lede">
+                The lifecycle reflects genuine local wallet state, retained
+                receipts and configured Testnet contracts.
+              </p>
+            </header>
+            <StellarActivity />
           </div>
         </section>
 
-        <section className="panel panel--ink final-cta">
-          <div className="shell final-cta__inner">
-            <div>
-              <p className="eyebrow">ZeroSeal</p>
+        <section className="section section--paper" id="business">
+          <div className="shell">
+            <header className="section__head">
+              <p className="eyebrow">Business model</p>
               <h2 className="display display--lg">
-                Prove the claim. <em className="display-accent">Keep the evidence private.</em>
+                Verification infrastructure for security programmes
               </h2>
-            </div>
-            <a className="btn btn--yellow" href="#wallet">
-              Connect Freighter
-            </a>
+              <p className="lede">
+                ZeroSeal can turn privacy-preserving claim verification into
+                reusable infrastructure for security programmes, protocols and
+                institutions.
+              </p>
+            </header>
+            <BusinessModelCarousel />
+          </div>
+        </section>
+
+        <section className="section section--cream" id="product-status">
+          <div className="shell">
+            <header className="section__head">
+              <p className="eyebrow">Product status</p>
+              <h2 className="display display--lg">Operational surface</h2>
+            </header>
+            <ProductStatusTerminal />
           </div>
         </section>
       </main>
 
-      <footer className="site-footer">
-        <div className="shell site-footer__inner">
-          <strong>ZeroSeal</strong>
-          <span>Privacy-preserving claims on Stellar.</span>
-          <span>Proudly built on Stellar.</span>
+      <footer className="footer">
+        <div className="shell footer__inner">
+          <div className="footer__brand">
+            <strong>ZEROSEAL</strong>
+            <p>Privacy-preserving security claims on Stellar.</p>
+          </div>
+          <nav className="footer__col" aria-label="Product">
+            <h2>Product</h2>
+            <ul>
+              {FOOTER_PRODUCT_LINKS.map((link) => (
+                <li key={link.href}>
+                  <a href={link.href}>{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <nav className="footer__col" aria-label="Developers">
+            <h2>Developers</h2>
+            <ul>
+              {FOOTER_DEVELOPER_LINKS.map((link) => (
+                <li key={link.href}>
+                  <a href={link.href} target="_blank" rel="noreferrer">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <nav className="footer__col" aria-label="Security">
+            <h2>Security</h2>
+            <ul>
+              <li>
+                <a href="#how-it-works">Architecture</a>
+              </li>
+              <li>
+                <span>Independent project notice</span>
+              </li>
+            </ul>
+          </nav>
+        </div>
+        <div className="shell footer__bottom">
+          <span>Built independently for Stellar Testnet.</span>
+          <span>© 2026 ZeroSeal</span>
+          <span>Network TESTNET</span>
+          <a href={explorerContractUrl(registryContractId)} target="_blank" rel="noreferrer">
+            Registry{" "}
+            <span className="mono" title={registryContractId}>
+              {shortenAddress(registryContractId)}
+            </span>
+          </a>
+          <a href={explorerContractUrl(verifierContractId)} target="_blank" rel="noreferrer">
+            Verifier{" "}
+            <span className="mono" title={verifierContractId}>
+              {shortenAddress(verifierContractId)}
+            </span>
+          </a>
         </div>
       </footer>
     </div>

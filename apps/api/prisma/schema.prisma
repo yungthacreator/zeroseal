@@ -1,0 +1,405 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClaimStatus {
+  DRAFT
+  AWAITING_PROOF
+  PROOF_RECEIVED
+  VERIFYING
+  VERIFIED
+  AWAITING_WALLET_SIGNATURE
+  SUBMITTED
+  CONFIRMED
+  RECEIPT_ISSUED
+  PROOF_REJECTED
+  TRANSACTION_FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum VerificationJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD_LETTERED
+}
+
+enum VerificationBoundary {
+  STRUCTURAL
+  CRYPTOGRAPHIC
+  SOROBAN
+  REGISTRY
+  TRANSACTION
+}
+
+enum VerificationResultStatus {
+  PENDING
+  PASSED
+  FAILED
+  UNAVAILABLE
+}
+
+enum ChainTransactionStatus {
+  SUBMITTED
+  PENDING
+  CONFIRMED
+  FAILED
+  UNKNOWN
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+model WalletAccount {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  address   String   @unique
+  network   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  claims       Claim[]
+  transactions ChainTransaction[]
+  payments     Payment[]
+
+  @@index([address])
+  @@index([network, address])
+}
+
+model Organisation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  programmes Programme[]
+}
+
+model Programme {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifier     String   @unique
+  name           String
+  organisationId String   @db.Uuid
+  network        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id])
+  snapshots    ProgrammeSnapshot[]
+  policies     ImpactPolicy[]
+  claims       Claim[]
+
+  @@index([identifier])
+}
+
+model ProgrammeSnapshot {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifier  String
+  programmeId String    @db.Uuid
+  description String?
+  startsAt    DateTime
+  expiresAt   DateTime?
+  immutableAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  programme Programme @relation(fields: [programmeId], references: [id])
+  claims    Claim[]
+
+  @@unique([programmeId, identifier])
+  @@index([programmeId])
+}
+
+model Circuit {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifier                String   @unique
+  version                   String
+  claimType                 String
+  proofSystem               String
+  evidenceCommitmentBinding Boolean  @default(false)
+  expectedPublicInputs      Json
+  active                    Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([identifier])
+  @@index([claimType])
+}
+
+model ImpactPolicy {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifier           String
+  programmeId          String   @db.Uuid
+  rule                 String
+  publicThreshold      String
+  circuitId            String
+  expectedPublicInputs Json
+  registryContract     String
+  verifierContract     String
+  network              String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  programme Programme @relation(fields: [programmeId], references: [id])
+  claims    Claim[]
+
+  @@unique([programmeId, identifier])
+  @@index([programmeId])
+  @@index([circuitId])
+}
+
+model Claim {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status                ClaimStatus @default(DRAFT)
+  idempotencyKey        String
+  network               String
+  programmeId           String      @db.Uuid
+  programmeSnapshotId   String      @db.Uuid
+  impactPolicyId        String      @db.Uuid
+  walletAccountId       String      @db.Uuid
+  circuitId             String
+  researcherCommitment  String?
+  evidenceBindingStatus String      @default("LOCAL_ONLY")
+  nullifier             String?
+  evidenceCommitmentId  String?     @db.Uuid
+  currentLifecycleError String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  programme           Programme            @relation(fields: [programmeId], references: [id])
+  programmeSnapshot   ProgrammeSnapshot    @relation(fields: [programmeSnapshotId], references: [id])
+  impactPolicy        ImpactPolicy         @relation(fields: [impactPolicyId], references: [id])
+  walletAccount       WalletAccount        @relation(fields: [walletAccountId], references: [id])
+  evidenceCommitment  EvidenceCommitment?  @relation(fields: [evidenceCommitmentId], references: [id])
+  publicInputs        ClaimPublicInput[]
+  proofArtifacts      ProofArtifact[]
+  verificationJobs    VerificationJob[]
+  verificationResults VerificationResult[]
+  transactions        ChainTransaction[]
+  receipt             ClaimReceipt?
+  payments            Payment[]
+
+  @@unique([walletAccountId, idempotencyKey])
+  @@unique([network, circuitId, nullifier])
+  @@index([walletAccountId])
+  @@index([programmeId])
+  @@index([status])
+  @@index([nullifier])
+}
+
+model ClaimPublicInput {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  claimId   String   @db.Uuid
+  position  Int
+  name      String
+  valueHex  String
+  digest    String
+  createdAt DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, position])
+  @@index([claimId])
+}
+
+model ProofArtifact {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  claimId               String   @db.Uuid
+  schemaVersion         String
+  proofEncoding         String
+  proofByteLength       Int
+  publicInputByteLength Int
+  artifactDigest        String
+  proofDigest           String
+  publicInputDigest     String
+  sanitizedMetadata     Json
+  createdAt             DateTime @default(now())
+
+  claim            Claim             @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  verificationJobs VerificationJob[]
+
+  @@unique([claimId, artifactDigest])
+  @@index([artifactDigest])
+}
+
+model VerificationJob {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  claimId             String                @db.Uuid
+  proofArtifactId     String?               @db.Uuid
+  status              VerificationJobStatus @default(QUEUED)
+  attemptCount        Int                   @default(0)
+  verifierVersion     String?
+  proofArtifactDigest String?
+  publicInputDigest   String?
+  durationMs          Int?
+  errorCode           String?
+  sanitizedError      String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  claim         Claim          @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  proofArtifact ProofArtifact? @relation(fields: [proofArtifactId], references: [id])
+
+  @@index([claimId])
+  @@index([status])
+}
+
+model VerificationResult {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  claimId          String                   @db.Uuid
+  boundary         VerificationBoundary
+  status           VerificationResultStatus
+  verifierVersion  String?
+  inputDigest      String?
+  outputDigest     String?
+  errorCode        String?
+  sanitizedMessage String?
+  createdAt        DateTime                 @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, boundary])
+  @@index([claimId])
+  @@index([boundary, status])
+}
+
+model EvidenceCommitment {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  network        String
+  commitment     String
+  manifestDigest String
+  fileCount      Int
+  metadata       Json
+  circuitBound   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  claims   Claim[]
+  receipts ClaimReceipt[]
+
+  @@unique([network, commitment])
+  @@index([commitment])
+}
+
+model ChainTransaction {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  network              String
+  transactionHash      String
+  walletAccountId      String?                @db.Uuid
+  claimId              String?                @db.Uuid
+  ledgerNumber         Int?
+  sourceAccount        String?
+  contractId           String?
+  method               String
+  operationType        String
+  researcherCommitment String?
+  status               ChainTransactionStatus @default(SUBMITTED)
+  feeCharged           String?
+  submittedAt          DateTime               @default(now())
+  confirmedAt          DateTime?
+  failedAt             DateTime?
+  rawResponseDigest    String?
+  idempotencyKey       String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  walletAccount WalletAccount? @relation(fields: [walletAccountId], references: [id])
+  claim         Claim?         @relation(fields: [claimId], references: [id])
+  receipt       ClaimReceipt?
+
+  @@unique([network, transactionHash])
+  @@unique([claimId, idempotencyKey])
+  @@index([walletAccountId])
+  @@index([claimId])
+  @@index([status])
+  @@index([transactionHash])
+}
+
+model ClaimReceipt {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptId              String   @unique
+  claimId                String   @unique @db.Uuid
+  programmeIdentifier    String
+  snapshotIdentifier     String
+  policyIdentifier       String
+  circuitId              String
+  walletAddress          String
+  researcherCommitment   String
+  evidenceCommitmentId   String?  @db.Uuid
+  evidenceBindingStatus  String   @default("LOCAL_ONLY")
+  nullifier              String?
+  publicInputDigest      String
+  proofArtifactDigest    String
+  verificationResult     Json
+  transactionId          String   @unique @db.Uuid
+  transactionHash        String
+  ledgerNumber           Int
+  registryContract       String
+  verifierContract       String
+  network                String
+  explorerTransactionUrl String
+  explorerAccountUrl     String
+  explorerRegistryUrl    String
+  explorerVerifierUrl    String
+  receiptDigest          String
+  issuedAt               DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  claim              Claim               @relation(fields: [claimId], references: [id])
+  evidenceCommitment EvidenceCommitment? @relation(fields: [evidenceCommitmentId], references: [id])
+  transaction        ChainTransaction    @relation(fields: [transactionId], references: [id])
+
+  @@index([receiptId])
+  @@index([transactionHash])
+}
+
+model Payment {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletAccountId String        @db.Uuid
+  claimId         String?       @db.Uuid
+  network         String
+  transactionHash String?
+  amount          String
+  assetCode       String
+  destination     String
+  status          PaymentStatus @default(PENDING)
+  confirmedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  walletAccount WalletAccount        @relation(fields: [walletAccountId], references: [id])
+  claim         Claim?               @relation(fields: [claimId], references: [id])
+  credits       VerificationCredit[]
+
+  @@index([walletAccountId])
+  @@index([transactionHash])
+  @@index([status])
+}
+
+model VerificationCredit {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId      String    @db.Uuid
+  organisationId String?   @db.Uuid
+  quantity       Int
+  remaining      Int
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+}

@@ -1,0 +1,23 @@
+{
+  "name": "zeroseal",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api:dev": "npm --prefix apps/api run dev",
+    "api:build": "npm --prefix apps/api run build",
+    "api:test": "npm --prefix apps/api run test",
+    "api:worker": "npm --prefix apps/api run worker",
+    "api:lint": "npm --prefix apps/api run lint",
+    "api:prisma:generate": "npm --prefix apps/api run prisma:generate",
+    "api:prisma:migrate": "npm --prefix apps/api run prisma:migrate",
+    "api:prisma:validate": "npm --prefix apps/api run prisma:validate",
+    "infra:dev": "docker compose -f docker-compose.dev.yml up -d",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:lint": "npm --prefix apps/web run lint",
+    "web:typecheck": "npm --prefix apps/web run typecheck"
+  }
+}

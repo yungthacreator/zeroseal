@@ -1,28 +1,101 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import { useWallet } from "@/context/wallet-context";
 import { shortenAddress } from "@/lib/presentation";
 
+const FREIGHTER_URL = "https://freighter.app/";
+
 export function WalletAction() {
-  const { address, status, error, connect, clearSession } = useWallet();
+  const { address, network, status, error, connect, clearSession } =
+    useWallet();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const connecting =
+    status === "detecting" || status === "requesting_access";
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointer = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
 
   if (address) {
+    const networkLabel = network?.network ?? "Stellar";
+
     return (
-      <div className="wallet-action" data-state="connected">
-        <span className="wallet-action__address" title={address}>
-          <span className="wallet-action__dot" aria-hidden="true" />
-          {shortenAddress(address)}
-        </span>
+      <div className="wallet-action" data-open={open} ref={rootRef}>
         <button
           type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={clearSession}
+          className="wallet-pill"
+          aria-expanded={open}
+          aria-haspopup="menu"
+          onClick={() => setOpen((value) => !value)}
         >
-          Disconnect wallet
+          <span className="wallet-pill__dot" aria-hidden="true" />
+          <span className="wallet-pill__addr">{shortenAddress(address)}</span>
+          <span className="wallet-pill__net">{networkLabel}</span>
+          <svg
+            className="wallet-pill__chev"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m6 9 6 6 6-6"
+            />
+          </svg>
         </button>
-        <span className="visually-hidden" aria-live="polite">
-          Stellar account connected.
-        </span>
+
+        {open ? (
+          <div className="wallet-menu" role="menu">
+            <dl>
+              <div className="wallet-menu__row">
+                <dt>Account</dt>
+                <dd>{address}</dd>
+              </div>
+              <div className="wallet-menu__row">
+                <dt>Network</dt>
+                <dd>{networkLabel}</dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              className="btn btn--outline btn--sm wallet-menu__disconnect"
+              onClick={() => {
+                clearSession();
+                setOpen(false);
+              }}
+            >
+              Disconnect wallet
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -31,15 +104,43 @@ export function WalletAction() {
     <div className="wallet-action">
       <button
         type="button"
-        className="btn btn--solid btn--sm"
+        className="btn btn--primary btn--sm"
         onClick={() => void connect()}
-        disabled={status === "connecting"}
+        disabled={connecting}
       >
-        {status === "connecting" ? "Connecting\u2026" : "Connect Freighter"}
+        {connecting ? "Connecting..." : "Connect Freighter"}
       </button>
-      <span className="visually-hidden" role="status" aria-live="polite">
-        {error ?? ""}
-      </span>
+      {status === "unavailable" ||
+      status === "wrong_network" ||
+      status === "rejected" ||
+      status === "error" ? (
+        <div className="wallet-install" role="status" aria-live="polite">
+          <strong>
+            {status === "unavailable"
+              ? "Freighter is required"
+              : "Wallet connection"}
+          </strong>
+          <p>
+            {error === "Wallet connection was cancelled." ||
+            error === "Switch Freighter to Stellar Testnet to continue."
+              ? error
+              : "Freighter authorises ZeroSeal transactions from your browser. Your secret key never leaves the wallet."}
+          </p>
+          <div>
+            {status === "unavailable" ? (
+              <a href={FREIGHTER_URL} target="_blank" rel="noreferrer">
+                Install official Freighter
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void connect()}
+            >
+              Retry connection
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
