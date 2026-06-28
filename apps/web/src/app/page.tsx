@@ -1,4 +1,5 @@
 import { BusinessModelCarousel } from "@/components/business-model-carousel";
+import { CredibilityMarquee } from "@/components/credibility-marquee";
 import { HeroActions } from "@/components/hero-actions";
 import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
 import { OnChainActivity } from "@/components/on-chain-activity";
@@ -23,7 +24,7 @@ const verifierContractId =
 const TECH_PIPELINE = [
   "Noir circuit",
   "UltraHonk proof",
-  "Soroban verifier",
+  "Soroban verifier status",
   "Claim Registry",
   "Replay-protected receipt",
 ] as const;
@@ -80,8 +81,9 @@ export default function Home() {
             <p className="lede hero__lede">
               ZeroSeal lets security researchers prove that private
               vulnerability evidence satisfies a public impact rule. The
-              witness remains on the researcher&apos;s device while Soroban
-              verifies the proof and Stellar records the result.
+              witness remains on the researcher&apos;s device while ZeroSeal
+              separates structural validation, cryptographic verification
+              status and confirmed Stellar Testnet records.
             </p>
             <HeroActions />
             <div className="tech-pipeline" aria-label="Technical pipeline">
@@ -97,6 +99,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <CredibilityMarquee />
 
         <section className="section section--dotted" id="how-it-works">
           <div className="shell">

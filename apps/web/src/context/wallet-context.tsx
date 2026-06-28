@@ -51,19 +51,6 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 const AUTO_RESTORE_KEY = "zeroseal:wallet-auto-restore";
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
-function isMobileBrowser(): boolean {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const userAgent = navigator.userAgent;
-
-  return (
-    /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent) ||
-    (/Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1)
-  );
-}
-
 function walletErrorMessage(error: unknown): string {
   if (
     typeof error === "object" &&
@@ -326,23 +313,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     const maximumAttempts = 3;
 
-    if (isMobileBrowser() && !("freighter" in window)) {
-      timer = window.setTimeout(() => {
-        if (!cancelled) {
-          setStatus("unavailable");
-          setError("Wallet extension required.");
-        }
-      }, 450);
-
-      return () => {
-        cancelled = true;
-
-        if (timer !== null) {
-          window.clearTimeout(timer);
-        }
-      };
-    }
-
     const attemptRestore = async () => {
       if (cancelled) {
         return;
@@ -365,12 +335,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const connection = await isConnected();
-
-      if (!cancelled && (connection.error || !connection.isConnected)) {
-        setStatus("unavailable");
-        setError("Freighter is required");
-      }
+      await isConnected();
     };
 
     timer = window.setTimeout(() => {

@@ -16,7 +16,7 @@ async function bootstrap() {
   app.use(express.urlencoded({ extended: false, limit: "128kb" }));
   app.enableShutdownHooks();
   app.enableCors({
-    origin: config.WEB_ORIGIN,
+    origin: config.CORS_ALLOWED_ORIGINS,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"],
     credentials: false,
@@ -39,7 +39,7 @@ async function bootstrap() {
   );
   SwaggerModule.setup("/api/docs", app, document);
 
-  await app.listen(config.API_PORT, "0.0.0.0");
+  await app.listen(config.PORT, "0.0.0.0");
 }
 
 void bootstrap();

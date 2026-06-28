@@ -1,55 +1,57 @@
 # ZeroSeal Demo Runbook
 
-## Pre-Demo Checks
-- Start PostgreSQL and Redis: `docker compose -f docker-compose.dev.yml up -d`.
-- Apply migrations: `npm --prefix apps/api run prisma:migrate`.
-- Start API: `npm --prefix apps/api run dev`.
-- Start worker: `npm --prefix apps/api run worker`.
-- Start web: `npm --prefix apps/web run dev -- --hostname 0.0.0.0 --port 3001`.
-- API health: `http://127.0.0.1:4000/health`.
-- Web URL: `http://127.0.0.1:3001`.
-- Freighter is unlocked.
-- Freighter network is Stellar Testnet.
-- Wallet has enough Testnet XLM.
-- Registry and verifier contract IDs are configured.
+## Open
+- Live frontend: `https://zeroseal.vercel.app`.
+- Local fallback: `http://127.0.0.1:3001`.
+- Local API health: `http://127.0.0.1:4000/health`.
+- Local API readiness: `http://127.0.0.1:4000/ready`.
 
-## Demo Flow
-1. Open ZeroSeal.
-2. Connect Freighter.
-3. Show the connected Testnet account.
-4. Select ZeroSeal Security Impact Demo.
-5. Confirm the active snapshot and policy.
-6. Choose local evidence.
-7. Explain that files remain local.
-8. Show evidence commitment creation.
-9. Continue without copying any hash.
-10. Load the approved proof artifact.
-11. Show structural and cryptographic verification states separately.
-12. Authorise the prepared Stellar transaction only if a transaction is intentionally being demonstrated.
-13. Confirm the transaction in Freighter only during an approved live demo.
-14. Wait for backend reconciliation.
-15. Show confirmed transaction hash.
-16. Open the transaction in StellarExpert.
-17. Return to ZeroSeal.
-18. Show the immutable public receipt.
-19. Show network activity.
-20. Briefly show the business-model carousel.
+## Prerequisites
+- Desktop Firefox or Chromium with the official Freighter browser extension.
+- Freighter unlocked and switched to Stellar Testnet.
+- Testnet account funded.
+- PostgreSQL and Redis running locally, or a verified production API configured in Vercel.
+- API env includes `DATABASE_URL`, `REDIS_URL`, `CORS_ALLOWED_ORIGINS`, Stellar Testnet URLs, registry contract ID and verifier contract ID.
+- Worker is running as a separate process.
 
-## Failure Recovery
-- Wallet locked: unlock Freighter and retry Connect Freighter.
-- Wallet missing: install the official Freighter browser extension.
-- Wrong network: switch Freighter to Stellar Testnet.
-- API unavailable: start `apps/api` and confirm `/health`.
-- Worker unavailable: start `npm --prefix apps/api run worker`.
-- Proof rejected: check artifact schema, public-input ordering and byte lengths.
-- Transaction rejected: no chain state changed; retry when ready.
-- Transaction pending: wait for reconciliation or inspect the transaction hash.
-- Explorer unavailable: keep the confirmed hash and retry StellarExpert later.
-- Previously registered researcher: recover provenance from Horizon; if unavailable, show Registry state found only.
-- Commitment mismatch: do not overwrite researcherCommitment with evidenceCommitment.
-- Circuit does not support evidence binding: show claim-attached, circuit binding pending.
+## Exact Demo Fixture
+- Programme: `ZeroSeal Security Impact Demo`.
+- Programme ID: `zeroseal-security-impact-demo`.
+- Snapshot ID: `security-impact-demo-v1`.
+- Policy ID: `published-impact-threshold-v1`.
+- Circuit: `security-impact-v1`, version `v1`.
+- Proof artifact: `apps/web/public/zeroseal/browser-claim.json`.
+- Evidence commitment: browser-calculated local digest, optional for the fixed proof artifact.
+- Evidence binding status: claim-attached or local-only; not proof-bound in v1.
 
-## Mobile Notes
-- A phone cannot open a computer's `127.0.0.1` address.
-- Mobile testing requires a deployed HTTPS URL or explicitly configured LAN URL.
-- Direct mobile Freighter handoff is not enabled until a supported wallet connector is configured.
+## Five-Minute Sequence
+1. Open `https://zeroseal.vercel.app` and state the trust problem: researchers need to prove impact without revealing exploit details.
+2. Show the selected demo programme, snapshot, policy, circuit, network and evidence-binding status.
+3. Open the local evidence manifest, choose safe dummy files if desired, and explain that file contents remain on device.
+4. Load `browser-claim.json` and show the researcher commitment, nullifier, proof artifact digest and public-input digest.
+5. Create the persisted claim through the API if the production or local backend is available.
+6. Explain that ZeroSeal structurally validates the artifact and queues verification; UltraHonk and Soroban verification remain separate truth boundaries.
+7. Connect desktop Freighter on Testnet.
+8. Authorise the Claim Registry transaction only when the presenter intentionally wants to submit a Testnet transaction.
+9. After submission, wait for backend reconciliation and show the real transaction hash and ledger only if returned by Stellar.
+10. Inspect the explorer links and the public receipt only after the API issues it from confirmed transaction state.
+
+## Expected Claim Statuses
+- `AWAITING_PROOF` after claim creation.
+- `PROOF_RECEIVED` after supported artifact submission.
+- `VERIFYING` after verification is queued.
+- `AWAITING_WALLET_SIGNATURE` after the worker processes the supported structural proof path.
+- `SUBMITTED` when a transaction is recorded for reconciliation.
+- `CONFIRMED` only after successful Stellar reconciliation.
+- `RECEIPT_ISSUED` only after receipt creation from confirmed transaction state.
+
+## Plain-English Explanation
+ZeroSeal keeps private evidence and witness material away from the public workflow. The current demo proves that a supported public-input shape can move through a persisted claim lifecycle, wallet-authorised Stellar Testnet transaction, reconciliation and receipt path. It does not yet prove that arbitrary local evidence files are cryptographically bound into the v1 proof.
+
+## Fallbacks
+- Production API unavailable: say the frontend is live, backend deployment is pending, and run the local API.
+- Worker unavailable: show claim and proof persistence, then state that queue processing is paused.
+- Testnet delay: keep the submitted transaction pending and use StellarExpert to inspect status later.
+- Wallet missing or mobile device: continue without wallet and show desktop signing instructions.
+- Previously registered researcher: display registry state only; do not call it a complete receipt unless the original transaction hash and ledger are available.
+- Proof rejected: explain schema, byte length, digest or public-input ordering mismatch.

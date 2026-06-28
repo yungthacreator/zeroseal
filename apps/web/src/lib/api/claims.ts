@@ -59,18 +59,40 @@ export type ApiErrorState = {
   message: string;
 };
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_ZEROSEAL_API_URL?.replace(/\/$/, "") ??
-  "http://127.0.0.1:4000";
+function localApiBase(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname)
+    ? "http://127.0.0.1:4000"
+    : "";
+}
+
+function apiBase(): string {
+  return (
+    process.env.NEXT_PUBLIC_ZEROSEAL_API_URL?.replace(/\/$/, "") ??
+    localApiBase()
+  );
+}
 
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const base = apiBase();
+
+  if (!base) {
+    throw {
+      code: "API_UNCONFIGURED",
+      message: "Production API is not configured",
+    } satisfies ApiErrorState;
+  }
+
   let response: Response;
 
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${base}${path}`, {
       ...options,
       headers: {
         "content-type": "application/json",

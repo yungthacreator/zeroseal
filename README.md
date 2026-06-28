@@ -1,14 +1,16 @@
 # ZeroSeal
 
+**Prove impact. Reveal nothing.**
+
 **Live application:** https://zeroseal.vercel.app
 
-**Prove impact. Reveal nothing.**
+**Network:** Stellar Testnet
 
 ZeroSeal is privacy-preserving proof infrastructure for responsible Web3 security disclosure.
 
 It enables a security researcher to prove that private vulnerability evidence satisfies a programme's published impact policy without exposing the exploit path, reproduction steps, sensitive code paths, private witness values, or complete proof of concept.
 
-A proof is generated from private witness data using Noir and UltraHonk. Public claim inputs are verified through Soroban infrastructure, while the Claim Registry records a replay-resistant result on Stellar.
+The current `security-impact-v1` workflow structurally validates a supported proof artifact, persists the claim lifecycle, queues verification work, records real Stellar Testnet transaction state and issues receipts only after genuine confirmation. Complete server-side UltraHonk verification and proof-bound arbitrary evidence commitments remain roadmap items until the v2 circuit and verifier path are complete.
 
 ## The problem
 
@@ -42,7 +44,7 @@ A programme defines public verification parameters such as:
 * verifier contract;
 * registry contract.
 
-The researcher supplies private evidence to an approved proof circuit.
+The researcher supplies private witness values to an approved proof flow. Local evidence files can also be hashed into an evidence commitment, but the current v1 circuit does not yet prove that those arbitrary files produced the submitted proof.
 
 The resulting public claim can demonstrate that:
 
@@ -52,7 +54,7 @@ The resulting public claim can demonstrate that:
 * the approved threshold was met;
 * the researcher commitment matches the proof;
 * the claim contains a unique nullifier;
-* the resulting transaction was confirmed on Stellar.
+* the resulting transaction was confirmed on Stellar, when a real transaction hash and ledger have been reconciled.
 
 The private witness is not sent to Stellar and is not stored by the ZeroSeal backend.
 
@@ -85,7 +87,7 @@ The current evidence workspace can calculate a deterministic local commitment wi
 
 ### 4. Generate the proof
 
-Use the approved Noir circuit and UltraHonk proving flow to generate a proof artifact.
+Use or load the approved `security-impact-v1` proof artifact.
 
 The private witness remains on the researcher's device.
 
@@ -103,7 +105,7 @@ The implementation distinguishes between:
 
 * artifact structural validation;
 * cryptographic proof verification;
-* Soroban verifier execution;
+* Soroban verifier status;
 * Claim Registry recording.
 
 ZeroSeal does not trust a client-supplied `verified` value.
@@ -479,7 +481,8 @@ EXPLORER_TRANSACTION_BASE_URL=
 EXPLORER_ACCOUNT_BASE_URL=
 EXPLORER_CONTRACT_BASE_URL=
 
-CORS_ORIGINS=http://127.0.0.1:3001
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001
+API_PUBLIC_URL=http://127.0.0.1:4000
 ```
 
 Never commit environment files or secrets.
@@ -621,9 +624,9 @@ A result must remain pending where complete cryptographic verification is unavai
 
 ### Soroban verification
 
-Implemented for the configured Testnet workflow.
+Configured for the Testnet workflow.
 
-The application can invoke the configured verifier and record public claim data through Stellar transactions.
+The application distinguishes configured Soroban verifier state from completed proof verification. The current worker keeps cryptographic and Soroban verification boundaries pending unless a real verifier path confirms them. The Claim Registry transaction is reconciled separately from proof verification.
 
 ### Evidence commitment binding
 
@@ -711,10 +714,11 @@ ZeroSeal is designed for:
 * audit firms;
 * bug bounty programmes;
 * protocol security teams;
-* researchers who submit through platforms such as Immunefi;
 * organisations that need privacy-preserving claim verification.
 
-ZeroSeal is an independent project and does not claim affiliation with Immunefi, Freighter, Stellar Development Foundation, or any listed protocol unless explicitly stated.
+ZeroSeal is designed to complement security disclosure workflows used across platforms and communities such as Immunefi, Sherlock, Code4rena, Cantina, Hats Finance and CodeHawks.
+
+ZeroSeal is an independent project and is not affiliated with or endorsed by these organisations.
 
 ## Responsible use
 

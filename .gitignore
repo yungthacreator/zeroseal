@@ -19,12 +19,12 @@ keys/
 
 # Noir / Barretenberg generated artifacts
 target/
-proof
-proof.*
-public_inputs
-public_inputs.*
-vk
-vk.*
+/proof
+/proof.*
+/public_inputs
+/public_inputs.*
+/vk
+/vk.*
 *.gz
 *.bin
 

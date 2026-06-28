@@ -3678,6 +3678,130 @@ svg {
   border: 1px solid var(--gold);
 }
 
+.credibility-marquee {
+  padding-block: clamp(38px, 6vw, 70px);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.credibility-marquee .shell {
+  display: grid;
+  gap: 14px;
+}
+
+.credibility-marquee__lede {
+  max-width: 760px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: clamp(1rem, 1.4vw, 1.14rem);
+}
+
+.credibility-marquee__label,
+.credibility-marquee__notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.credibility-marquee__viewport {
+  position: relative;
+  max-width: 100%;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.credibility-marquee__viewport::before,
+.credibility-marquee__viewport::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: min(86px, 16vw);
+  pointer-events: none;
+}
+
+.credibility-marquee__viewport::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--paper), rgba(251, 249, 243, 0));
+}
+
+.credibility-marquee__viewport::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--paper), rgba(251, 249, 243, 0));
+}
+
+.credibility-marquee__motion {
+  display: flex;
+  width: max-content;
+  animation: disclosureMarquee 36s linear infinite;
+}
+
+.credibility-marquee:focus-within .credibility-marquee__motion,
+.credibility-marquee:hover .credibility-marquee__motion {
+  animation-play-state: paused;
+}
+
+.credibility-marquee__track {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 22px);
+  margin: 0;
+  padding: 0 clamp(12px, 2vw, 22px) 0 0;
+  list-style: none;
+}
+
+.credibility-marquee__track li {
+  flex: 0 0 auto;
+}
+
+.credibility-marquee__wordmark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+@keyframes disclosureMarquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credibility-marquee__viewport {
+    overflow: visible;
+  }
+
+  .credibility-marquee__viewport::before,
+  .credibility-marquee__viewport::after {
+    display: none;
+  }
+
+  .credibility-marquee__motion {
+    width: auto;
+    animation: none;
+  }
+
+  .credibility-marquee__track {
+    flex-wrap: wrap;
+  }
+
+  .credibility-marquee__track[aria-hidden="true"] {
+    display: none;
+  }
+}
+
 .researcher-journey {
   display: grid;
   gap: 34px;

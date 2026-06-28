@@ -6,33 +6,33 @@ const SLIDES = [
   {
     title: "Verification credits",
     buyer: "Security programmes and sponsoring organisations",
-    value: "Pay per verified claim or purchase prepaid verification capacity.",
-    stellar: "Optional XLM-denominated payment and receipt settlement.",
-    availability: "Partial: payment code exists; credit issuance remains backend-gated.",
+    value: "Per-proof or prepaid access to ZeroSeal verification infrastructure.",
+    stellar: "Optional Testnet payment experiments remain separate from claim truth.",
+    availability: "Roadmap commercially; demo payment code is not production billing.",
   },
   {
     title: "Programme infrastructure",
     buyer: "Bug-bounty programmes, protocols and audit organisations",
     value:
-      "Configure policies, immutable snapshots, approved circuits and receipt management.",
+      "Policy configuration, claim dashboards, verification records and receipt management.",
     stellar: "Claim Registry calls and public receipt state.",
     availability: "Partial: demo programme, policies and claim persistence are implemented.",
   },
   {
-    title: "Verification API",
-    buyer: "Platforms and institutional integrators",
+    title: "Custom proof systems",
+    buyer: "Programmes with specific impact rules",
     value:
-      "Submit permitted proof artifacts, query claim state and retrieve public receipts.",
-    stellar: "Verified claims can reference confirmed network transactions.",
-    availability: "Backend-supported for the current Security Impact workflow.",
+      "Purpose-built circuits and integrations for programme-specific impact rules.",
+    stellar: "Dedicated verifier contracts and versioned public-input policy.",
+    availability: "Roadmap unless a dedicated circuit is implemented and verified.",
   },
   {
-    title: "Custom proof systems",
-    buyer: "Financial, compliance and security teams",
+    title: "Enterprise disclosure infrastructure",
+    buyer: "Security teams and disclosure operators",
     value:
-      "Purpose-built circuits for reserves, thresholds, eligibility and policy attestations.",
-    stellar: "Dedicated verifier contracts and programme-specific registry policy.",
-    availability: "Planned unless a dedicated circuit is implemented.",
+      "Private claim workflows, audit trails and controlled disclosure integration.",
+    stellar: "Receipts can anchor confirmed disclosure events on Stellar Testnet.",
+    availability: "Roadmap; not presented as a live enterprise product.",
   },
 ] as const;
 
