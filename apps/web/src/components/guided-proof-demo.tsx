@@ -4,65 +4,79 @@ import { useEffect, useMemo, useState } from "react";
 
 const SCENES = [
   {
-    title: "A vulnerability is discovered",
-    caption: "Exploit code, reproduction steps and sensitive values remain private.",
-    visual: "discovery",
+    title: "Choose the reporting path",
+    caption:
+      "Start by choosing HackerOne, Immunefi, Code4rena, CodeHawks, Cantina, HackenProof, Sherlock or a direct project report.",
+    active: ["device"],
   },
   {
-    title: "The evidence stays on the device",
-    caption: "ZeroSeal does not upload the complete exploit to present the claim.",
-    visual: "privacy",
+    title: "Add private finding context",
+    caption:
+      "Enter the title, severity, category, summary and target while sensitive notes remain local.",
+    active: ["device", "zeroseal"],
   },
   {
-    title: "The approved proof package is loaded",
-    caption: "The package supplies only the supported public claim structure.",
-    visual: "package",
+    title: "Generate the private seal",
+    caption:
+      "ZeroSeal prepares a commitment only after the researcher acts. No fingerprint is shown beforehand.",
+    active: ["device", "zeroseal"],
   },
   {
-    title: "The fingerprint appears automatically",
-    caption: "ZeroSeal reads it from the proof package. The researcher does not calculate or paste it.",
-    visual: "fingerprint",
+    title: "Review the public claim",
+    caption:
+      "The public claim keeps only approved fields: programme context, policy, threshold, fingerprint and nullifier.",
+    active: ["zeroseal"],
   },
   {
-    title: "The researcher reviews the Testnet action",
-    caption: "Freighter shows the exact Claim Registry transaction before approval.",
-    visual: "wallet",
+    title: "Approve the registry action",
+    caption:
+      "Freighter shows the exact Stellar Testnet action before anything is submitted.",
+    active: ["zeroseal", "wallet"],
   },
   {
-    title: "The confirmed action receives a receipt",
-    caption: "The real transaction, ledger and receipt appear only after confirmation.",
-    visual: "receipt",
+    title: "Verify the receipt",
+    caption:
+      "A receipt appears only after a real Testnet transaction hash and ledger are available.",
+    active: ["wallet", "receipt"],
   },
 ] as const;
 
-function SceneArtwork({ visual }: { visual: (typeof SCENES)[number]["visual"] }) {
+const CONTROL_ICONS = {
+  play: "▶",
+  pause: "Ⅱ",
+  previous: "‹",
+  next: "›",
+  restart: "↻",
+} as const;
+
+function SceneArtwork({
+  active,
+}: {
+  active: readonly string[];
+}) {
+  const isActive = (node: string) => active.includes(node);
+
   return (
-    <div className="demo-art" data-scene={visual}>
-      <div className="demo-art__local">
-        <span>Report</span>
-        <span>Code file</span>
-        <span>Lock</span>
-      </div>
-      <div className="demo-art__boundary">
+    <div className="demo-art" aria-hidden="true">
+      <div className="demo-art__node demo-art__node--device" data-active={isActive("device")}>
         <span>Private device</span>
+        <strong>report · PoC · notes</strong>
       </div>
-      <div className="demo-art__zeroseal">ZeroSeal</div>
-      <div className="demo-art__wallet">
-        <strong>Freighter</strong>
-        <span>Stellar Testnet</span>
-        <span>Approval required</span>
+      <div className="demo-art__node demo-art__node--zeroseal" data-active={isActive("zeroseal")}>
+        <span>ZeroSeal</span>
+        <strong>private seal</strong>
       </div>
-      <div className="demo-art__fingerprint">
-        <span>Researcher fingerprint</span>
-        <strong>04365013...448751d0</strong>
+      <div className="demo-art__node demo-art__node--wallet" data-active={isActive("wallet")}>
+        <span>Wallet</span>
+        <strong>Testnet approval</strong>
       </div>
-      <div className="demo-art__receipt">
-        <span>Transaction appears after confirmation</span>
-        <span>Ledger appears after confirmation</span>
-        <span>Receipt appears after confirmation</span>
+      <div className="demo-art__node demo-art__node--receipt" data-active={isActive("receipt")}>
+        <span>Receipt</span>
+        <strong>verified public record</strong>
       </div>
-      <i className="demo-art__line demo-art__line--a" />
-      <i className="demo-art__line demo-art__line--b" />
+      <span className="demo-art__path demo-art__path--one" />
+      <span className="demo-art__path demo-art__path--two" />
+      <span className="demo-art__path demo-art__path--three" />
     </div>
   );
 }
@@ -95,7 +109,7 @@ export function GuidedProofDemo() {
         }
         return next;
       });
-    }, 8500);
+    }, 6800);
 
     return () => window.clearTimeout(timer);
   }, [index, reducedMotion, running]);
@@ -111,35 +125,35 @@ export function GuidedProofDemo() {
         <header className="section__head section__head--split">
           <div>
             <p className="eyebrow">VISUAL WALKTHROUGH</p>
-            <h2 className="display display--lg">Watch the claim become public.</h2>
+            <h2 className="display display--lg">From private evidence to public receipt.</h2>
           </div>
           <p className="lede">
-            A short interactive walkthrough shows what stays private, what is
-            approved for public review, and when a receipt appears.
+            A compact walkthrough shows what the researcher does, when ZeroSeal
+            generates a seal, and when Stellar becomes part of the record.
           </p>
         </header>
 
         <div
           className="guided-demo__frame"
           aria-roledescription="carousel"
-          aria-label="Illustrative guided tour"
+          aria-label="ZeroSeal guided walkthrough"
         >
           <div className="guided-demo__screen" data-running={running}>
-            <SceneArtwork visual={scene.visual} />
+            <SceneArtwork active={scene.active} />
           </div>
 
           <article className="guided-demo__content" key={scene.title}>
-            <span className="guided-demo__type">Illustrative guided tour</span>
+            <span className="guided-demo__type">Guided product flow</span>
             <p className="guided-demo__progress" aria-live="polite">
-              Scene {index + 1} of {SCENES.length}
+              Step {index + 1} of {SCENES.length}
             </p>
             <h3>{scene.title}</h3>
-            <p>{scene.caption}</p>
+            <p className="guided-demo__typewriter">{scene.caption}</p>
             {index === SCENES.length - 1 ? (
               <div className="guided-demo__ready">
-                <strong>Ready to try the real flow?</strong>
-                <a className="btn btn--yellow" href="#proof-workspace">
-                  Open live Testnet workspace
+                <strong>Ready to use the workspace?</strong>
+                <a className="btn btn--yellow btn--sm" href="#proof-workspace">
+                  Open workspace
                 </a>
               </div>
             ) : null}
@@ -151,29 +165,51 @@ export function GuidedProofDemo() {
         </div>
 
         <div className="guided-demo__controls" aria-label="Guided tour controls">
-          <button type="button" onClick={() => setRunning(true)}>
-            Start
-          </button>
-          <button type="button" onClick={() => setRunning(false)}>
-            Pause
-          </button>
-          <button type="button" onClick={() => pauseAndSet(index - 1)}>
-            Previous
-          </button>
-          <button type="button" onClick={() => pauseAndSet(index + 1)}>
-            Next
+          <button
+            type="button"
+            className="guided-demo__control-icon"
+            aria-label="Play walkthrough"
+            onClick={() => setRunning(true)}
+          >
+            <span aria-hidden="true">{CONTROL_ICONS.play}</span>
           </button>
           <button
             type="button"
+            className="guided-demo__control-icon"
+            aria-label="Pause walkthrough"
+            onClick={() => setRunning(false)}
+          >
+            <span aria-hidden="true">{CONTROL_ICONS.pause}</span>
+          </button>
+          <button
+            type="button"
+            className="guided-demo__control-icon"
+            aria-label="Previous walkthrough step"
+            onClick={() => pauseAndSet(index - 1)}
+          >
+            <span aria-hidden="true">{CONTROL_ICONS.previous}</span>
+          </button>
+          <button
+            type="button"
+            className="guided-demo__control-icon"
+            aria-label="Next walkthrough step"
+            onClick={() => pauseAndSet(index + 1)}
+          >
+            <span aria-hidden="true">{CONTROL_ICONS.next}</span>
+          </button>
+          <button
+            type="button"
+            className="guided-demo__control-icon"
+            aria-label="Restart walkthrough"
             onClick={() => {
               setRunning(false);
               setIndex(0);
             }}
           >
-            Restart
+            <span aria-hidden="true">{CONTROL_ICONS.restart}</span>
           </button>
-          <a className="btn btn--outline" href="#proof-workspace">
-            Open live workspace
+          <a className="btn btn--outline btn--sm" href="#proof-workspace">
+            Workspace
           </a>
         </div>
       </div>

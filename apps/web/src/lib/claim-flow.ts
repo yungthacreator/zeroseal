@@ -193,7 +193,7 @@ function defaultPublicClaim(): PublicClaimConfig {
     policyIdentifier: "published-impact-threshold-v1",
     policyVersion: "security-impact-v1",
     publicThreshold: "",
-    verifierVersion: "structural-browser-demo-v1",
+    verifierVersion: "structural-browser-testnet-v1",
   };
 }
 
@@ -222,35 +222,35 @@ export function createInitialClaimDraft(): ClaimDraft {
   };
 }
 
-export function createFictionalDemoDraft(): ClaimDraft {
+export function createExampleDemoDraft(): ClaimDraft {
   return {
     ...createInitialClaimDraft(),
     demoMode: true,
     reportingContext: "Directly to a project",
-    programmeName: "Fictional Vault Security Programme",
-    programmeUrl: "https://example.invalid/fictional-vault",
+    programmeName: "Example Vault Security Programme",
+    programmeUrl: "https://example.invalid/example-vault",
     targetType: "smart contract",
-    targetLocator: "fictional-vault.testnet",
+    targetLocator: "example-vault.testnet",
     affectedComponent: "withdraw(uint256)",
     network: "Stellar Testnet",
-    findingTitle: "Fictional smart-contract threshold finding",
+    findingTitle: "Example smart-contract threshold finding",
     bugCategory: "Access control",
     claimedSeverity: "High",
     impactStatement:
-      "A fictional vault path can demonstrate an impact above the published threshold.",
+      "An example vault path can demonstrate an impact above the published threshold.",
     estimatedFinancialImpact: "250000",
     privateEvidence: {
       vulnerabilityDescription:
-        "Fictional example only. No real exploit or live target is used.",
+        "Example only. No real exploit or live target is used.",
       reproductionSteps:
-        "1. Review the fictional programme.\n2. Generate a private seal.\n3. Approve only the public Testnet action.",
-      proofOfConcept: "fictional-example-only",
-      affectedCode: "contracts/FictionalVault.sol",
-      screenshotsOrLogs: "fictional-log-entry",
-      expectedResult: "The fictional vault remains balanced.",
-      actualResult: "The fictional path exceeds the threshold.",
+        "1. Review the example programme.\n2. Generate a private seal.\n3. Approve only the public Testnet action.",
+    proofOfConcept: "example-private-outline",
+      affectedCode: "contracts/ExampleVault.sol",
+      screenshotsOrLogs: "example-log-entry",
+      expectedResult: "The example vault remains balanced.",
+      actualResult: "The example path exceeds the threshold.",
       privateImpactValues: "250000",
-      privateNotes: "Safe demo data. Do not use an unpatched real finding.",
+      privateNotes: "Example data. Do not use an unpatched real finding.",
     },
     publicClaim: {
       ...defaultPublicClaim(),

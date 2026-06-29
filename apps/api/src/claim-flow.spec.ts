@@ -6,7 +6,7 @@ import {
   buildPublicPayloadAsync,
   canonicalizeClaim,
   createInitialClaimDraft,
-  createFictionalDemoDraft,
+  createExampleDemoDraft,
   generatePrivateSeal,
   nextClaimState,
   publicPayloadContainsOnlyAllowedFields,
@@ -22,17 +22,17 @@ const completeDraft: ClaimDraft = {
   targetLocator: "0x0000000000000000000000000000000000000000",
   affectedComponent: "withdraw(uint256)",
   network: "Stellar Testnet",
-  findingTitle: "Fictional rounding issue",
+  findingTitle: "Example rounding issue",
   bugCategory: "Accounting",
   claimedSeverity: "High",
-  impactStatement: "A fictional vault can report a threshold-level loss.",
+  impactStatement: "An example vault can report a threshold-level loss.",
   estimatedFinancialImpact: "250000",
   privateEvidence: {
-    vulnerabilityDescription: "Private fictional description",
-    reproductionSteps: "1. Deploy fictional vault\n2. Trigger fictional path",
-    proofOfConcept: "fictional-poc.js",
-    affectedCode: "contracts/FictionalVault.sol",
-    screenshotsOrLogs: "fictional-log",
+    vulnerabilityDescription: "Private example description",
+    reproductionSteps: "1. Deploy example vault\n2. Trigger example path",
+    proofOfConcept: "example-poc.js",
+    affectedCode: "contracts/ExampleVault.sol",
+    screenshotsOrLogs: "example-log",
     expectedResult: "No loss",
     actualResult: "Threshold loss",
     privateImpactValues: "250000.00",
@@ -42,7 +42,7 @@ const completeDraft: ClaimDraft = {
     policyIdentifier: "published-impact-threshold-v1",
     policyVersion: "security-impact-v1",
     publicThreshold: "100000",
-    verifierVersion: "structural-browser-demo-v1",
+    verifierVersion: "structural-browser-testnet-v1",
   },
 };
 
@@ -55,11 +55,11 @@ void test("new claim draft starts untouched with no package or fingerprint", () 
   assert.equal(draft.receipt, null);
 });
 
-void test("fictional demo data is explicit and still starts unsealed", () => {
-  const draft = createFictionalDemoDraft();
+void test("Try ZeroSeal example data is explicit and still starts unsealed", () => {
+  const draft = createExampleDemoDraft();
 
   assert.equal(draft.demoMode, true);
-  assert.match(draft.findingTitle, /Fictional/i);
+  assert.match(draft.findingTitle, /Example/i);
   assert.equal(draft.researcherFingerprint, null);
   assert.equal(draft.state, "DRAFT");
 });

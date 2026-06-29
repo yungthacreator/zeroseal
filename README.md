@@ -1,757 +1,219 @@
 # ZeroSeal
 
-**Prove impact. Reveal nothing.**
+**Prove security impact. Keep private evidence private.**
 
-**Live application:** https://zeroseal.vercel.app
+ZeroSeal is a privacy-preserving security disclosure product for researchers, bug bounty platforms, audit teams, and protocol security programmes.
 
-**Network:** Stellar Testnet
+It helps a researcher create a public, verifiable claim about a vulnerability without publishing the exploit path, raw report, proof of concept, private witness values, sensitive screenshots, salts, keys, or unpublished report content.
 
-ZeroSeal is privacy-preserving proof infrastructure for responsible Web3 security disclosure.
+ZeroSeal is built around Stellar Testnet receipts, Freighter wallet approval, local private evidence handling, and proof-aware claim preparation.
 
-It enables a security researcher to prove that private vulnerability evidence satisfies a programme's published impact policy without exposing the exploit path, reproduction steps, sensitive code paths, private witness values, or complete proof of concept.
+## Live Product
 
-The current `security-impact-v1` workflow structurally validates a supported proof artifact, persists the claim lifecycle, queues verification work, records real Stellar Testnet transaction state and issues receipts only after genuine confirmation. Complete server-side UltraHonk verification and proof-bound arbitrary evidence commitments remain roadmap items until the v2 circuit and verifier path are complete.
+- Frontend: `https://zeroseal.vercel.app`
+- Network: Stellar Testnet
+- Repository: `https://github.com/yungthacreator/zeroseal`
 
-## The problem
+## Product Flow
 
-Responsible disclosure still depends heavily on trust.
+ZeroSeal has three primary entry points:
 
-A researcher may discover a serious vulnerability but face a difficult choice:
+- **Create claim**: build a private claim from scratch.
+- **Try ZeroSeal**: use an example claim or enter test details to understand the full flow.
+- **Verify receipt**: inspect a public receipt, transaction hash, or claim identifier.
 
-* reveal sensitive technical evidence before receiving acknowledgement;
-* expose reproduction details to prove the report is credible;
-* trust that the receiving programme will protect the report;
-* risk duplicate disputes or questions about when evidence existed;
-* disclose enough information to prove impact while avoiding unnecessary operational risk.
+The user flow is:
 
-Protocol teams face the opposite problem. They need enough evidence to assess whether a report satisfies their impact policy, but receiving a complete exploit package can itself create additional security risk.
+1. Choose where the vulnerability will be reported.
+2. Describe the target and finding.
+3. Add private evidence locally.
+4. Generate a private seal.
+5. Review the approved public claim.
+6. Approve the Stellar Testnet registry action with Freighter.
+7. Receive a public receipt after a real confirmed transaction.
 
-ZeroSeal introduces a cryptographic verification layer between the researcher and the receiving programme.
+No fingerprint, private seal output, wallet request, transaction hash, ledger, or receipt is shown before the user takes the required action.
 
-The researcher proves that an approved condition is satisfied. The programme receives a verifiable result and an auditable Stellar receipt. The private witness remains with the researcher.
+## What ZeroSeal Proves Today
 
-## What ZeroSeal Proves
+The current Noir circuit supports a specific private impact-threshold predicate. It is designed for a double-withdrawal or stale-entitlement style impact claim.
 
-The current implemented workflow focuses on security impact claims.
+The current predicate checks that:
 
-A programme defines public verification parameters such as:
+- the actor is unprivileged;
+- each individual withdrawal is within entitlement;
+- the combined withdrawals exceed entitlement;
+- demonstrated private loss is at least the public minimum loss threshold.
 
-* programme identifier;
-* programme snapshot;
-* impact policy;
-* minimum loss threshold;
-* circuit identifier;
-* verifier contract;
-* registry contract.
+The current implementation does not claim to prove every possible exploit or arbitrary exploit validity.
 
-The researcher supplies private witness values to an approved proof flow. Local evidence files can also be hashed into an evidence commitment, but the current v1 circuit does not yet prove that arbitrary evidence files produced the submitted proof.
+## Privacy Boundary
 
-The current Noir predicate is intentionally narrow: it demonstrates that a private impact scenario meets or exceeds a public threshold for the supported double-withdrawal or stale-entitlement class. It does not prove generic exploit validity.
+### Stays Private
 
-The resulting public claim can demonstrate that:
+- exploit details;
+- reproduction steps;
+- private files;
+- proof-of-concept content;
+- private witness values;
+- exact vulnerable paths;
+- salts and keys;
+- unpublished report content;
+- wallet secret keys and seed phrases.
 
-* the claim belongs to the selected programme;
-* the correct programme snapshot was used;
-* the selected impact rule was satisfied;
-* the approved threshold was met;
-* the researcher commitment matches the proof;
-* the claim contains a unique nullifier;
-* the resulting transaction was confirmed on Stellar, when a real transaction hash and ledger have been reconciled.
+### Can Become Public
 
-The private witness is not sent to Stellar and is not stored by the ZeroSeal backend.
+- claim identifier;
+- reporting context;
+- programme or project context;
+- target snapshot hash;
+- policy identifier;
+- public threshold;
+- researcher fingerprint;
+- nullifier;
+- verifier version;
+- researcher public key after wallet approval;
+- transaction hash after confirmation;
+- ledger after confirmation;
+- registry contract;
+- receipt URL.
 
-## Product Workflow
+## Stellar Testnet Flow
 
-The homepage keeps the first interaction focused on three paths:
+ZeroSeal uses Freighter for wallet approval on Stellar Testnet.
 
+The app does not fabricate chain data. A receipt is only treated as confirmed when a real transaction hash is returned and can be shown through the Testnet receipt flow.
+
+Current on-chain action:
+
+- register or record the researcher fingerprint through the configured Claim Registry path;
+- persist receipt details locally and through the backend path when available;
+- link the user to Stellar explorer views for public inspection.
+
+## Application Routes
+
+- `/`: product homepage.
 - `/create`: create a private claim from scratch.
-- `/demo`: try a safe fictional walkthrough. The fictional package only loads after the user asks for it.
-- `/verify`: inspect a public receipt, transaction hash, or claim identifier.
+- `/demo`: Try ZeroSeal.
+- `/verify`: verify a public receipt or transaction.
+- `/receipt/[identifier]`: inspect a receipt by transaction hash or local claim identifier.
 
-A new researcher can follow the claim creation flow in this order.
-
-### 1. Reporting Context
-
-Choose whether the claim is a bounty submission, coordinated disclosure, internal review, or audit follow-up.
-
-### 2. Programme and Target
-
-Enter the programme, target, target snapshot, and affected component. These values define the public context that the private seal binds to.
-
-### 3. Finding and Severity
-
-Describe the public impact category, severity, and threshold. The browser copy keeps the statement constrained to the supported predicate.
-
-### 4. Private Evidence
-
-Prepare vulnerability details, proof-of-concept notes, screenshots, logs, reproduction notes, and witness details locally. These fields remain on the researcher's device.
-
-### 5. Generate Private Seal
-
-The browser creates a researcher fingerprint, canonical claim hash, private evidence digest, nullifier, and recovery bundle only after the user clicks **Generate private seal**.
-
-No fingerprint, proof package, or demo data is preloaded before user action.
-
-### 6. Review Public Claim
-
-Review the exact public payload. Raw evidence, reproduction steps, witness values, salt, keys, and unpublished report text are excluded.
-
-### 7. Publish
-
-Connect Freighter on Stellar Testnet only when ready to publish. ZeroSeal never requests or stores the wallet seed phrase or secret key.
-
-### 8. Receipt
-
-Inspect a receipt only after a real Stellar transaction hash and ledger are available. A local claim identifier can show the reviewed public payload, but it must not pretend that a transaction has been confirmed.
-
-After confirmation, the application can expose:
-
-* transaction hash;
-* confirmed ledger;
-* source account;
-* registry contract;
-* verifier contract;
-* network;
-* public receipt;
-* Stellar explorer links.
-
-No fabricated transaction hashes or ledger values are used.
-
-## System architecture
+## Architecture
 
 ```text
-Private evidence
-      |
-      | remains local
-      v
-Noir security-impact circuit
-      |
-      v
-UltraHonk proof artifact
-      |
-      v
+Researcher browser
+  |
+  | private evidence remains local
+  v
+Private seal generation
+  |
+  | public claim fields only
+  v
+ZeroSeal web app
+  |
+  | optional API persistence and structural checks
+  v
 ZeroSeal API
-  | structural validation
-  | claim persistence
-  | verification job
-  | lifecycle tracking
-      |
-      v
-Soroban verifier
-      |
-      v
-Claim Registry
-      |
-      v
-Confirmed Stellar transaction
-      |
-      v
-Immutable public receipt
+  |
+  | Freighter wallet approval
+  v
+Stellar Testnet
+  |
+  | confirmed transaction
+  v
+Public receipt and verifier page
 ```
 
-## Privacy boundary
-
-### Remains private
-
-* exploit details;
-* reproduction steps;
-* sensitive code paths;
-* private witness values;
-* researcher secrets;
-* complete proof-of-concept files;
-* supporting documents;
-* wallet secret keys;
-* wallet seed phrases.
-
-### Becomes publicly verifiable
-
-* programme identifier;
-* snapshot identifier;
-* policy identifier;
-* circuit identifier;
-* public threshold;
-* researcher commitment;
-* state commitment;
-* nullifier;
-* proof digest;
-* accepted public-input digest;
-* transaction hash;
-* ledger number;
-* registry contract;
-* verifier contract;
-* receipt identifier;
-* confirmation timestamp.
-
-## Current implementation
-
-ZeroSeal currently includes:
-
-* a Noir security impact circuit;
-* UltraHonk proof artifact support;
-* a Soroban verifier contract;
-* a Soroban Claim Registry contract;
-* replay-resistant nullifier handling;
-* Freighter desktop wallet integration;
-* Stellar Testnet transaction support;
-* real explorer links;
-* browser-side evidence hashing;
-* a NestJS backend;
-* PostgreSQL persistence;
-* Prisma database models and migrations;
-* verification job processing;
-* transaction reconciliation;
-* public claim receipts;
-* wallet activity endpoints;
-* programme, snapshot and policy endpoints;
-* typed frontend API integration;
-* deterministic tests;
-* health and readiness endpoints.
-
-## Browser Claim State
-
-```text
-DRAFT
-  |
-  v
-PRIVATE_EVIDENCE_READY
-  |
-  v
-SEAL_GENERATING
-  |
-  v
-SEAL_GENERATED
-  |
-  v
-PUBLIC_CLAIM_REVIEWED
-  |
-  v
-AWAITING_WALLET
-  |
-  v
-SUBMITTED
-  |
-  v
-CONFIRMED
-  |
-  v
-RECEIPT_ISSUED
-```
-
-Failure returns the browser flow to `FAILED` with the user-visible error. Backend claim lifecycle validation remains separate for persisted API claims.
-
-## Backend API
-
-The dedicated API is located in:
-
-```text
-apps/api
-```
-
-Main endpoints:
-
-```text
-POST /api/v1/claims
-GET  /api/v1/claims/:claimId
-GET  /api/v1/claims/:claimId/status
-POST /api/v1/claims/:claimId/proof
-POST /api/v1/claims/:claimId/evidence
-POST /api/v1/claims/:claimId/verification
-POST /api/v1/claims/:claimId/transactions
-GET  /api/v1/claims/:claimId/transactions
-GET  /api/v1/claims/:claimId/receipt
-
-GET  /api/v1/wallets/:address/claims
-GET  /api/v1/wallets/:address/activity
-GET  /api/v1/wallets/:address/researcher-registration
-
-GET  /api/v1/transactions/:transactionHash
-GET  /api/v1/receipts/:receiptId
-
-GET  /api/v1/programmes
-GET  /api/v1/programmes/:programmeId
-GET  /api/v1/programmes/:programmeId/snapshots
-GET  /api/v1/programmes/:programmeId/policies
-GET  /api/v1/circuits
-
-GET  /health
-GET  /ready
-```
-
-## Database model
-
-The backend includes production-oriented models for:
-
-* `WalletAccount`
-* `Organisation`
-* `Programme`
-* `ProgrammeSnapshot`
-* `ImpactPolicy`
-* `Claim`
-* `ClaimPublicInput`
-* `ProofArtifact`
-* `VerificationJob`
-* `VerificationResult`
-* `EvidenceCommitment`
-* `ChainTransaction`
-* `ClaimReceipt`
-* `Payment`
-* `VerificationCredit`
-
-Important protections include:
-
-* UUID primary keys;
-* immutable receipt identifiers;
-* idempotency keys;
-* unique transaction hashes per network;
-* nullifier uniqueness;
-* programme snapshot immutability;
-* indexed wallet, programme, status and transaction fields;
-* transaction-safe lifecycle updates;
-* no raw private evidence storage;
-* no secret key storage.
-
-## Receipt contents
-
-A confirmed receipt can contain:
-
-* receipt ID;
-* claim ID;
-* programme ID;
-* snapshot ID;
-* policy ID;
-* circuit ID;
-* researcher wallet address;
-* researcher commitment;
-* nullifier;
-* public-input digest;
-* proof artifact digest;
-* Stellar transaction hash;
-* confirmed ledger;
-* registry contract;
-* verifier contract;
-* network;
-* confirmation time;
-* transaction explorer URL;
-* account explorer URL;
-* registry explorer URL;
-* verifier explorer URL.
-
-Issued receipt semantics are immutable.
-
-## Repository structure
+## Repository Structure
 
 ```text
 zeroseal/
-+-- apps/
-|   +-- api/                     NestJS API and verification worker
-|   +-- web/                     Next.js application
-+-- circuits/                    Noir proof circuits
-+-- contracts/                   Soroban contracts
-+-- packages/
-|   +-- claim-registry-client/   Shared Claim Registry client
-+-- docs/                        Runbooks, glossary and truth matrix
-+-- scripts/                     Development and validation scripts
-+-- docker-compose.dev.yml       PostgreSQL and Redis services
-+-- package.json                 Workspace commands
-+-- README.md
+  apps/
+    api/      NestJS API, claim lifecycle, receipts, queues, Stellar services
+    web/      Next.js app, claim UI, Try ZeroSeal, receipt verification
+  circuits/   Noir circuits
+  contracts/  Soroban contracts
+  docs/       product truth, runbooks, deployment notes
+  packages/   shared contract client code
+  scripts/    validation and support scripts
 ```
 
-## Technology
+## Local Development
 
-### Proof system
+Install dependencies:
 
-* Noir
-* UltraHonk
-* Barretenberg
-
-### Blockchain
-
-* Stellar
-* Soroban
-* Freighter
-* Stellar RPC
-* Horizon
-* Stellar Expert explorer
-
-### Backend
-
-* NestJS
-* TypeScript
-* PostgreSQL
-* Prisma
-* Redis
-* structured logging
-* OpenAPI
-* request IDs
-* rate limiting
-
-### Frontend
-
-* Next.js
-* React
-* TypeScript
-* typed API clients
-* responsive wallet interface
-
-## Local development
-
-### Requirements
-
-Install:
-
-* Node.js 22 or later;
-* npm;
-* Docker;
-* Docker Compose;
-* Freighter browser extension;
-* Rust and Stellar CLI for contract work;
-* Noir and Barretenberg for proof generation.
-
-### Clone the repository
-
-```bash
-git clone https://github.com/yungthacreator/zeroseal.git
-cd zeroseal
-```
-
-### Install dependencies
-
-```bash
+```powershell
 npm install
-npm --prefix apps/api install
-npm --prefix apps/web install
 ```
 
-### Start PostgreSQL and Redis
+Run the web app:
 
-```bash
+```powershell
+npm.cmd --prefix apps/web run dev
+```
+
+Run the API:
+
+```powershell
+npm.cmd --prefix apps/api run dev
+```
+
+Start local infrastructure when needed:
+
+```powershell
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-### Configure the API
+## Required Checks
 
-Create:
-
-```text
-apps/api/.env
+```powershell
+npm.cmd --prefix apps/web run lint
+npm.cmd --prefix apps/web run typecheck
+npm.cmd --prefix apps/web run build
+npm.cmd --prefix apps/api run test
+npm.cmd --prefix apps/api run build
 ```
 
-Use `apps/api/.env.example` as the template.
+## Environment
 
-Required configuration includes:
+Important environment values include:
 
-```env
-NODE_ENV=development
-PORT=4000
+- `NEXT_PUBLIC_REGISTRY_CONTRACT_ID`
+- `NEXT_PUBLIC_VERIFIER_CONTRACT_ID`
+- `NEXT_PUBLIC_API_BASE_URL`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `STELLAR_NETWORK`
+- `STELLAR_RPC_URL`
+- `STELLAR_HORIZON_URL`
+- `REGISTRY_CONTRACT_ID`
+- `VERIFIER_CONTRACT_ID`
 
-DATABASE_URL=postgresql://zeroseal:zeroseal_dev_password@127.0.0.1:5432/zeroseal
-REDIS_URL=redis://127.0.0.1:6379
+The default product network is Stellar Testnet.
 
-STELLAR_RPC_URL=
-STELLAR_HORIZON_URL=
-STELLAR_NETWORK_PASSPHRASE=
+## Product Truth
 
-REGISTRY_CONTRACT_ID=
-VERIFIER_CONTRACT_ID=
+ZeroSeal is a real product surface with a real Testnet path, but the current proof boundary is intentionally specific.
 
-EXPLORER_TRANSACTION_BASE_URL=
-EXPLORER_ACCOUNT_BASE_URL=
-EXPLORER_CONTRACT_BASE_URL=
+Current truth:
 
-CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001
-API_PUBLIC_URL=http://127.0.0.1:4000
-```
+- private evidence is not published by the claim wizard;
+- example data loads only after the user clicks Load example;
+- researcher fingerprint does not exist before private seal generation;
+- receipt pages do not invent transactions;
+- the current circuit supports a private impact-threshold predicate;
+- server-side UltraHonk verification and wider arbitrary evidence binding remain roadmap items.
 
-Never commit environment files or secrets.
+## Documentation
 
-### Configure the web application
+Useful docs:
 
-Create:
+- `docs/PRODUCT_FLOW_TRUTH.md`
+- `docs/DEMO_TRUTH_MATRIX.md`
+- `docs/DEMO_RUNBOOK.md`
+- `docs/RENDER_DEPLOYMENT.md`
+- `docs/ARCHITECTURE_DECISION.md`
 
-```text
-apps/web/.env.local
-```
+## Status
 
-Add:
-
-```env
-NEXT_PUBLIC_ZEROSEAL_API_URL=http://127.0.0.1:4000
-```
-
-### Apply migrations
-
-```bash
-set -a
-source apps/api/.env
-set +a
-
-npm --prefix apps/api run prisma:generate
-npm --prefix apps/api run prisma:migrate
-```
-
-### Start the API
-
-```bash
-set -a
-source apps/api/.env
-set +a
-
-npm --prefix apps/api run dev
-```
-
-The API should be available at:
-
-```text
-http://127.0.0.1:4000
-```
-
-Health checks:
-
-```bash
-curl http://127.0.0.1:4000/health
-curl http://127.0.0.1:4000/ready
-```
-
-### Start the verification worker
-
-Open another terminal:
-
-```bash
-cd ~/projects/zeroseal
-
-set -a
-source apps/api/.env
-set +a
-
-npm --prefix apps/api run worker
-```
-
-### Start the web application
-
-Open another terminal:
-
-```bash
-cd ~/projects/zeroseal
-
-npm --prefix apps/web run dev -- --hostname 127.0.0.1 --port 3001
-```
-
-Open:
-
-```text
-http://127.0.0.1:3001
-```
-
-## Validation
-
-Run the following before submitting changes:
-
-```bash
-npm --prefix apps/api run prisma:format
-npm --prefix apps/api run prisma:validate
-npm --prefix apps/api run prisma:generate
-npm --prefix apps/api run lint
-npm --prefix apps/api test
-npm --prefix apps/api run build
-
-npm --prefix apps/web run typecheck
-npm --prefix apps/web run lint
-npm --prefix apps/web run build
-
-git diff --check
-```
-
-Automated tests do not require real Stellar Testnet transactions.
-
-## Security properties
-
-ZeroSeal is designed around the following rules:
-
-* private evidence remains outside the backend;
-* secret keys remain inside the user's wallet;
-* proof results are never accepted from a client boolean;
-* nullifiers prevent supported replay attempts;
-* idempotency prevents duplicate claim creation;
-* transaction hashes are validated before persistence;
-* ledger data is retrieved from Stellar;
-* confirmed receipts require confirmed transactions;
-* raw proof data is excluded from application logs;
-* error responses do not expose production stack traces;
-* payload and proof sizes are restricted;
-* programme snapshots become immutable after use;
-* transaction status is reconciled in the background.
-
-## Current verification boundary
-
-The project deliberately separates four different verification statements.
-
-### Structural validation
-
-Implemented.
-
-ZeroSeal validates the artifact schema, identifiers, encodings, sizes, public-input count, ordering, digests, commitments and supported circuit configuration.
-
-### Server-side cryptographic verification
-
-Partially implemented.
-
-The adapter boundary exists, but complete server-side UltraHonk verification remains a development milestone.
-
-A result must remain pending where complete cryptographic verification is unavailable.
-
-### Soroban verification
-
-Configured for the Testnet workflow.
-
-The application distinguishes configured Soroban verifier state from completed proof verification. The current worker keeps cryptographic and Soroban verification boundaries pending unless a real verifier path confirms them. The Claim Registry transaction is reconciled separately from proof verification.
-
-### Evidence commitment binding
-
-Partially implemented.
-
-Browser-side evidence commitments can be attached to claims. The current `security-impact-v1` circuit does not yet constrain arbitrary uploaded evidence commitments as proof-bound public inputs.
-
-The application must describe such commitments as local or claim-attached until a versioned circuit binds them cryptographically.
-
-## Mobile wallet status
-
-Desktop Freighter extension support is the current signing path.
-
-Mobile browser extension signing is not claimed. Mobile users should follow the desktop wallet guidance until an official mobile handoff or WalletConnect-compatible Stellar flow is implemented and tested.
-
-ZeroSeal never asks mobile users to enter a seed phrase into the website.
-
-## Known limitations
-
-* complete server-side UltraHonk verification is still in progress;
-* arbitrary evidence commitments are not yet bound by `security-impact-v1`;
-* mobile wallet handoff is not configured;
-* verification credits are not yet operational;
-* XLM settlement is not yet part of the primary claim flow;
-* additional claim types require purpose-built circuits;
-* the deployed application requires `NEXT_PUBLIC_ZEROSEAL_API_URL` to point at the deployed API;
-* free Render services may cold start after idle time;
-* free Render PostgreSQL has free-plan retention limits.
-
-These limitations are shown openly so the application does not overstate what has been implemented.
-
-## Free Render Deployment
-
-The included Render blueprint is designed for a zero-cost production demo:
-
-* `zeroseal-api`, one free web service;
-* `zeroseal-postgres`, one free PostgreSQL database;
-* `zeroseal-redis`, one free Key Value instance.
-
-The API runs the verification and reconciliation worker in the same web process when `RUN_EMBEDDED_WORKER=true`. PostgreSQL remains the source of truth. Redis is only the queue transport, and queued work is recovered from persisted PostgreSQL records when the API starts or when Redis becomes available again.
-
-The blueprint pins the API service to `feat/testnet-browser-integration`, uses `autoDeployTrigger: commit` and does not set an `API_PUBLIC_URL` placeholder. Production public URL resolution relies on an explicit `API_PUBLIC_URL` only when supplied, then Render's `RENDER_EXTERNAL_URL`.
-
-See `docs/RENDER_DEPLOYMENT.md` for the exact blueprint and Vercel connection steps.
-
-## Homepage Story
-
-The frontend now introduces ZeroSeal in this order:
-
-1. Hero.
-2. Visual product walkthrough.
-3. Live Testnet workspace.
-4. Disclosure pain point.
-5. ZeroSeal verification layer.
-6. Simple how-it-works flow.
-7. Security disclosure ecosystem logos.
-8. Network activity and receipts.
-9. Security use cases.
-10. Programme infrastructure and business model.
-11. Product status.
-12. Footer.
-
-## Roadmap
-
-### Milestone 1
-
-Security impact proof workflow on Stellar Testnet.
-
-### Milestone 2
-
-Versioned circuit with cryptographically bound evidence commitments.
-
-### Milestone 3
-
-Complete server-side UltraHonk verification.
-
-### Milestone 4
-
-SEP-compatible wallet authentication.
-
-### Milestone 5
-
-Programme dashboards, verification credits and XLM settlement.
-
-### Milestone 6
-
-Additional circuits for:
-
-* financial thresholds;
-* solvency conditions;
-* wallet control;
-* reserve attestations;
-* compliance policies;
-* audit assertions;
-* protocol-specific security rules.
-
-## Why Stellar
-
-ZeroSeal uses Stellar because it provides:
-
-* fast transaction confirmation;
-* low transaction costs;
-* Soroban smart contracts;
-* transparent public state;
-* mature account infrastructure;
-* wallet-authorised transactions;
-* accessible Testnet tooling;
-* independently inspectable explorer records.
-
-The blockchain is used for public verification state and receipts. It is not used to store private vulnerability evidence.
-
-## Intended users
-
-ZeroSeal is designed for:
-
-* independent security researchers;
-* white hat researchers;
-* audit firms;
-* bug bounty programmes;
-* protocol security teams;
-* organisations that need privacy-preserving claim verification.
-
-ZeroSeal is designed to complement security disclosure workflows used across platforms and communities such as HackerOne, Immunefi, Code4rena and CodeHawks.
-
-ZeroSeal is an independent project and is not affiliated with or endorsed by these organisations.
-
-## Responsible use
-
-ZeroSeal is intended for authorised security research, responsible disclosure and approved verification workflows.
-
-Do not use this project to:
-
-* exploit live systems;
-* access private user information;
-* submit unauthorised transactions;
-* misrepresent vulnerability impact;
-* fabricate blockchain evidence;
-* expose private keys or seed phrases.
-
-## Live application
-
-Visit:
-
-https://zeroseal.vercel.app
-
-Connect Freighter on Stellar Testnet, inspect the proof workflow and follow confirmed transactions through the explorer links exposed by the application.
-
-## Licence
-
-See the repository licence for permitted use and distribution terms.
-
+ZeroSeal is competition-ready product infrastructure for privacy-preserving security claims on Stellar Testnet. The current milestone focuses on the full user journey from private evidence to public receipt while keeping proof claims precise and honest.

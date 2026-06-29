@@ -19,6 +19,10 @@ const ECOSYSTEMS = [
     name: "CodeHawks",
     logo: "/brands/codehawks.svg",
   },
+  {
+    name: "Cantina",
+    logo: "/brands/cantina.svg",
+  },
 ] as const;
 
 function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
@@ -34,6 +38,20 @@ function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
         unoptimized
       />
     </li>
+  );
+}
+
+function MarqueeTrack({ hidden = false }: { hidden?: boolean }) {
+  return (
+    <ul
+      className="credibility-marquee__track"
+      aria-hidden={hidden ? "true" : undefined}
+      aria-label={hidden ? undefined : "Security disclosure ecosystem examples"}
+    >
+      {ECOSYSTEMS.map((item) => (
+        <EcosystemLogo item={item} key={item.name} />
+      ))}
+    </ul>
   );
 }
 
@@ -54,14 +72,12 @@ export function CredibilityMarquee() {
           ZeroSeal can add a privacy-preserving verification and receipt layer
           to existing security research and disclosure workflows.
         </p>
-        <ul
-          className="credibility-marquee__viewport"
-          aria-label="Security disclosure ecosystem examples"
-        >
-          {ECOSYSTEMS.map((item) => (
-            <EcosystemLogo item={item} key={item.name} />
-          ))}
-        </ul>
+        <div className="credibility-marquee__viewport">
+          <div className="credibility-marquee__motion">
+            <MarqueeTrack />
+            <MarqueeTrack hidden />
+          </div>
+        </div>
       </div>
     </section>
   );

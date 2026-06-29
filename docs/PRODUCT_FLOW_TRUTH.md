@@ -5,7 +5,7 @@ This document is the product-facing truth boundary for the current ZeroSeal brow
 ## User Entry Points
 
 - `/create`: create a private claim from scratch.
-- `/demo`: try a safe fictional claim. The demo starts empty and only loads fictional data after the user explicitly asks for it.
+- `/demo`: Try ZeroSeal with an example claim. It starts empty and only loads example data after the user explicitly asks for it.
 - `/verify`: inspect a public receipt, transaction hash, or local public claim identifier.
 - `/receipt/[identifier]`: show confirmed Stellar receipt data for a real transaction hash, or a local public claim preview when no transaction is attached.
 
@@ -34,7 +34,7 @@ Before that click:
 
 - no researcher fingerprint is shown;
 - no package or proof artifact is loaded;
-- demo data is not preloaded.
+- example data is not preloaded.
 
 ## Public Payload
 
@@ -48,7 +48,7 @@ The public payload may contain:
 - policy identifier and version;
 - public threshold;
 - researcher fingerprint;
-- proof digest or supported proof output digest;
+- supported verifier output digest;
 - nullifier;
 - verifier version;
 - timestamp;

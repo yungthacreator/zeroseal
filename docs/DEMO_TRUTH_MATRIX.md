@@ -1,4 +1,4 @@
-# ZeroSeal Demo Truth Matrix
+# Try ZeroSeal Truth Matrix
 
 | Visible claim or feature | Classification | Source of truth | Verification note |
 | --- | --- | --- | --- |
@@ -7,15 +7,15 @@
 | Managed PostgreSQL | Roadmap until provisioned | Provider database | Free Render PostgreSQL is configured in blueprint. Local Docker Postgres is not production |
 | Managed Redis and embedded worker | Implemented locally, roadmap until deployed | API process logs and queue processing | Free deployment runs the worker inside `zeroseal-api` with `RUN_EMBEDDED_WORKER=true` |
 | Redis queue recovery | Implemented locally | PostgreSQL verification jobs and transactions | Redis is transport only. PostgreSQL is source of truth |
-| Demo programme | Implemented locally | `GET /api/v1/programmes` | `ZeroSeal Security Impact Demo` only |
+| Testnet programme | Implemented locally | `GET /api/v1/programmes` | `ZeroSeal Security Impact Registry` only |
 | Third-party programme integration | Not supported | API programme records | Ecosystem names are references only |
 | Desktop Freighter connection | Implemented locally | Wallet context and browser extension | Tested path is desktop extension signing |
 | Mobile Freighter signing | Not supported | Wallet UX | Mobile can explore; signing requires desktop extension |
 | Focused claim creation route | Implemented locally | `/create` route and claim wizard | Homepage links to the route instead of embedding the technical workspace |
-| Safe fictional demo route | Implemented locally | `/demo` route and claim wizard | Starts untouched; fictional data loads only after an explicit user click |
+| Try ZeroSeal route | Implemented locally | `/demo` route and claim wizard | Starts untouched; example data loads only after an explicit user click |
 | Public receipt verification route | Implemented locally | `/verify` and `/receipt/[identifier]` routes | Shows public fields only; local claim identifiers cannot impersonate confirmed Stellar receipts |
 | Researcher fingerprint before generation | Not supported | Claim wizard state | Fingerprint is absent until the user clicks Generate private seal |
-| Preloaded proof package before user action | Not supported | Claim wizard state | No package is loaded by default in create or demo |
+| Preloaded private seal before user action | Not supported | Claim wizard state | No seal output is loaded by default in create or Try ZeroSeal |
 | Evidence files remain local | Implemented locally | Browser evidence manifest | File contents are read locally for hashing and are not sent to the API |
 | Wizard private evidence remains local | Implemented locally | Browser claim flow library | Private evidence is hashed locally for a seal and excluded from public payloads |
 | Evidence commitment attached to claim | Implemented locally | `POST /api/v1/claims/:claimId/evidence` | Stored as local or claim-attached metadata |

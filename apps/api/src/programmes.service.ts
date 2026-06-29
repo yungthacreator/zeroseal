@@ -3,8 +3,8 @@ import type { ApiConfig } from "./config";
 import { CONFIG } from "./tokens";
 import { PrismaService } from "./prisma.service";
 
-export const SECURITY_PROGRAMME_IDENTIFIER = "zeroseal-security-impact-demo";
-export const SECURITY_SNAPSHOT_IDENTIFIER = "security-impact-demo-v1";
+export const SECURITY_PROGRAMME_IDENTIFIER = "zeroseal-security-impact-testnet";
+export const SECURITY_SNAPSHOT_IDENTIFIER = "security-impact-testnet-v1";
 export const SECURITY_POLICY_IDENTIFIER = "published-impact-threshold-v1";
 export const SECURITY_CIRCUIT_ID = "security-impact-v1";
 
@@ -22,23 +22,23 @@ export class ProgrammesService implements OnModuleInit {
 
   async seedDevelopmentProgramme() {
     const organisation = await this.prisma.organisation.upsert({
-      where: { slug: "zeroseal-demo" },
+      where: { slug: "zeroseal-testnet" },
       update: {},
       create: {
-        slug: "zeroseal-demo",
-        name: "ZeroSeal demo organisation",
+        slug: "zeroseal-testnet",
+        name: "ZeroSeal Testnet Registry",
       },
     });
 
     const programme = await this.prisma.programme.upsert({
       where: { identifier: SECURITY_PROGRAMME_IDENTIFIER },
       update: {
-        name: "ZeroSeal Security Impact Demo",
+        name: "ZeroSeal Security Impact Registry",
         network: this.config.STELLAR_NETWORK,
       },
       create: {
         identifier: SECURITY_PROGRAMME_IDENTIFIER,
-        name: "ZeroSeal Security Impact Demo",
+        name: "ZeroSeal Security Impact Registry",
         network: this.config.STELLAR_NETWORK,
         organisationId: organisation.id,
       },
@@ -92,7 +92,7 @@ export class ProgrammesService implements OnModuleInit {
         programmeId: programme.id,
         identifier: SECURITY_SNAPSHOT_IDENTIFIER,
         description:
-          "Demo programme snapshot for the Security Impact circuit.",
+          "Testnet programme snapshot for the Security Impact circuit.",
         startsAt: new Date("2026-01-01T00:00:00.000Z"),
         expiresAt: new Date("2030-01-01T00:00:00.000Z"),
       },

@@ -358,15 +358,15 @@ export function ResearcherRegistration() {
   const programmeName =
     typeof selectedProgramme?.name === "string"
       ? selectedProgramme.name
-      : "ZeroSeal Security Impact Demo";
+      : "ZeroSeal Security Impact Registry";
   const programmeIdentifier =
     typeof selectedProgramme?.identifier === "string"
       ? selectedProgramme.identifier
-      : "zeroseal-security-impact-demo";
+      : "zeroseal-security-impact-testnet";
   const snapshotIdentifier =
     typeof selectedSnapshot?.identifier === "string"
       ? selectedSnapshot.identifier
-      : "security-impact-demo-v1";
+      : "security-impact-testnet-v1";
   const snapshotExpiry =
     typeof selectedSnapshot?.expiresAt === "string"
       ? selectedSnapshot.expiresAt
@@ -847,7 +847,7 @@ export function ResearcherRegistration() {
     if (registrationState === "matched") {
       return {
         id: "commitment",
-        label: "Proof package",
+        label: "Private seal",
         value: "Receipt issued",
         state: "verified",
       };
@@ -856,7 +856,7 @@ export function ResearcherRegistration() {
     if (registrationState === "mismatch") {
       return {
         id: "commitment",
-        label: "Proof package",
+        label: "Private seal",
         value: "Different value registered",
         state: "failed",
       };
@@ -865,11 +865,11 @@ export function ResearcherRegistration() {
     if (validCommitment) {
       return {
         id: "commitment",
-        label: "Proof package",
+        label: "Private seal",
         value:
           registrationState === "checking"
             ? "Checking registry"
-            : "Package loaded",
+            : "Seal prepared",
         state:
           registrationState === "checking"
             ? "checking"
@@ -880,7 +880,7 @@ export function ResearcherRegistration() {
     if (normalizedCommitment.length > 0) {
       return {
       id: "commitment",
-      label: "Proof package",
+      label: "Private seal",
       value: `${normalizedCommitment.length}/64 hex`,
         state: "warning",
       };
@@ -888,8 +888,8 @@ export function ResearcherRegistration() {
 
     return {
       id: "commitment",
-      label: "Proof package",
-      value: "Package not loaded",
+      label: "Private seal",
+      value: "Not generated",
       state: "pending",
     };
   })();
@@ -1055,7 +1055,7 @@ export function ResearcherRegistration() {
     }
 
     if (!validCommitment) {
-      return "Load the matching proof package to read the researcher fingerprint.";
+      return "Prepare the matching private seal to read the researcher fingerprint.";
     }
 
     return registrationState === "available"
@@ -1074,34 +1074,6 @@ export function ResearcherRegistration() {
         ? normalizedCommitment
         : `${normalizedCommitment.slice(0, 8)}...${normalizedCommitment.slice(-8)}`
       : commitment;
-
-  const whatHappensNext = (() => {
-    if (!loadedArtifact) {
-      return "Load the approved sample proof package. ZeroSeal will read the researcher fingerprint automatically.";
-    }
-
-    if (!walletConnected) {
-      return "Connect desktop Freighter and confirm that it is using Stellar Testnet.";
-    }
-
-    if (!correctNetwork) {
-      return "Switch Freighter to Stellar Testnet before approving any registry action.";
-    }
-
-    if (submissionState === "awaiting-signature") {
-      return "Review the contract, action and network shown inside Freighter before approval.";
-    }
-
-    if (registrationState === "matched") {
-      return "Open the real receipt after confirmation.";
-    }
-
-    if (registrationState === "available") {
-      return "Review the contract and action inside Freighter.";
-    }
-
-    return "ZeroSeal is checking the live Testnet state.";
-  })();
 
   const submitRegistration = async () => {
     if (!address) {
@@ -1254,10 +1226,10 @@ export function ResearcherRegistration() {
       <div className="shell">
         <header className="zs-reg-intro">
           <p className="zs-reg-intro__eyebrow zs-intro-kicker">LIVE TESTNET WORKSPACE</p>
-          <h2 className="zs-reg-intro__title zs-intro-title" id="zs-reg-heading">Try the real claim flow.</h2>
+          <h2 className="zs-reg-intro__title zs-intro-title" id="zs-reg-heading">Live workspace</h2>
           <p className="zs-reg-intro__lede zs-intro-note">
-            Load the sample proof, review the generated fingerprint, create the
-            claim and approve the registry action through Freighter.
+            Select a programme, add the finding context, generate the private
+            seal and approve the registry action through Freighter when ready.
           </p>
           <div className="safety-notice" role="note">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1275,7 +1247,7 @@ export function ResearcherRegistration() {
             <p className="eyebrow">Programme</p>
             <h3>{programmeName}</h3>
             <p>
-              This sample programme demonstrates how a security programme can
+              This Testnet programme shows how a security programme can
               publish an impact rule without requesting the complete private
               witness.
             </p>
@@ -1284,7 +1256,7 @@ export function ResearcherRegistration() {
             <dl>
               <div>
                 <dt>Programme</dt>
-                <dd>ZeroSeal Security Impact Demo</dd>
+                <dd>ZeroSeal Security Impact Registry</dd>
               </div>
               <div>
                 <dt>Public rule</dt>
@@ -1298,8 +1270,8 @@ export function ResearcherRegistration() {
                 <dd>Stellar Testnet</dd>
               </div>
               <div>
-                <dt>Proof package</dt>
-                <dd>security-impact-v1</dd>
+                <dt>Private seal</dt>
+                <dd>Generated only after user action</dd>
               </div>
             </dl>
             <details className="programme-selector__details">
@@ -1370,10 +1342,19 @@ export function ResearcherRegistration() {
           ))}
         </div>
 
-        <aside className="next-panel" aria-live="polite">
-          <span>Next step</span>
-          <p>{whatHappensNext}</p>
-        </aside>
+        <div className="workspace-status-strip" aria-live="polite">
+          {[
+            "Select programme",
+            "Add finding",
+            "Generate seal",
+            "Review public claim",
+            "Publish Testnet record",
+          ].map((item, index) => (
+            <span key={item} data-active={index === 0 && !loadedArtifact}>
+              {item}
+            </span>
+          ))}
+        </div>
 
         <div className="zs-ws">
           <div className="zs-ws__bar">
@@ -1418,15 +1399,16 @@ export function ResearcherRegistration() {
               <div className="workspace-guide">
                 <h3>Guided view</h3>
                 <p>
-                  Work through the real flow. ZeroSeal reads the fingerprint
-                  after the sample proof package loads.
+                  Work through the real flow. ZeroSeal prepares the fingerprint
+                  only after you choose to generate the private seal.
                 </p>
                 <ol>
-                  <li>Load sample proof package</li>
+                  <li>Select programme</li>
+                  <li>Add finding</li>
+                  <li>Generate seal</li>
                   <li>Review the researcher fingerprint</li>
                   <li>Connect Freighter on Stellar Testnet</li>
-                  <li>Continue to wallet approval</li>
-                  <li>Inspect the public receipt after confirmation</li>
+                  <li>Review and approve the public registry action</li>
                 </ol>
               </div>
             )}
@@ -1501,11 +1483,11 @@ export function ResearcherRegistration() {
                     Researcher fingerprint
                   </label>
                   <span className="zs-field__count" data-valid={validCommitment}>
-                    {validCommitment ? "loaded" : `${normalizedCommitment.length}/64`}
+                    {validCommitment ? "ready" : `${normalizedCommitment.length}/64`}
                   </span>
                 </div>
                 <p className="zs-field__hint">
-                  Read automatically from the approved proof package.
+                  Appears after the private seal is prepared.
                 </p>
 
                 <div className="zs-input" data-state={inputState}>
@@ -1517,7 +1499,7 @@ export function ResearcherRegistration() {
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck={false}
-                    placeholder="Load the approved proof package"
+                    placeholder="Generate private seal"
                     value={displayCommitment}
                     readOnly
                     disabled={busy}
@@ -1545,7 +1527,7 @@ export function ResearcherRegistration() {
                 <details className="technical-details technical-details--compact">
                   <summary>Technical name: researcher commitment</summary>
                   <p>
-                    This value identifies the approved proof package without
+                    This value identifies the approved public claim without
                     revealing the private witness.
                   </p>
                   <button
@@ -1604,15 +1586,15 @@ export function ResearcherRegistration() {
             </strong>
           </div>
           <div>
-            <span>Proof package</span>
+            <span>Private seal</span>
             <strong>
               {claimStatus === "PROOF_RECEIVED" ||
               claimStatus === "VERIFYING" ||
               claimStatus === "AWAITING_WALLET_SIGNATURE"
-                ? "Artifact structurally checked"
+                ? "Seal checked"
                 : loadedArtifact
-                  ? "Package loaded"
-                  : "Package not loaded"}
+                  ? "Seal prepared"
+                  : "Not generated"}
             </strong>
           </div>
           <div>

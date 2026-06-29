@@ -2,13 +2,13 @@
 
 import { Buffer } from "buffer";
 import Link from "next/link";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { useWallet } from "@/context/wallet-context";
 import {
   buildPublicPayloadAsync,
-  canContinueFromStep,
-  createFictionalDemoDraft,
+  createExampleDemoDraft,
   createInitialClaimDraft,
   formatFingerprint,
   generatePrivateSeal,
@@ -29,37 +29,37 @@ type WizardMode = "create" | "demo";
 type PublishState = "idle" | "preparing" | "awaiting" | "submitting" | "confirmed" | "failed";
 
 const STEPS = [
-  "Reporting context",
-  "Programme and target",
+  "Report",
+  "Target",
   "Finding",
-  "Private evidence",
+  "Evidence",
+  "Private seal",
   "Public claim",
-  "Generate private seal",
-  "Review",
-  "Publish",
+  "Testnet action",
   "Receipt",
 ] as const;
 
 const REPORTING_CONTEXTS = [
-  "Immunefi",
-  "HackerOne",
-  "Code4rena",
-  "Sherlock",
-  "Cantina",
-  "HackenProof",
-  "Directly to a project",
-  "Other",
+  { label: "HackerOne", logo: "/brands/hackerone.svg" },
+  { label: "Immunefi", logo: "/brands/immunefi.svg" },
+  { label: "Code4rena", logo: "/brands/code4rena.svg" },
+  { label: "CodeHawks", logo: "/brands/codehawks.svg" },
+  { label: "Cantina", logo: "/brands/cantina.svg" },
+  { label: "HackenProof" },
+  { label: "Sherlock" },
+  { label: "Direct to project" },
+  { label: "Other" },
 ] as const;
 
 const TARGET_TYPES = [
-  "smart contract",
-  "repository",
-  "web application",
+  "Smart contract",
+  "Repository",
+  "Web application",
   "API",
-  "mobile application",
+  "Mobile application",
 ] as const;
 
-const SEVERITIES = ["Critical", "High", "Medium", "Low"] as const;
+const SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
 
 function extractTransactionHash(value: unknown): string | null {
   if (!value || typeof value !== "object") {
@@ -122,6 +122,22 @@ function downloadJson(filename: string, value: unknown): void {
   URL.revokeObjectURL(url);
 }
 
+function isStepComplete(index: number, step: number, draft: ClaimDraft, reviewed: boolean): boolean {
+  if (index < step) {
+    return true;
+  }
+  if (index === 4) {
+    return Boolean(draft.privateSeal);
+  }
+  if (index === 5) {
+    return reviewed;
+  }
+  if (index === 7) {
+    return Boolean(draft.receipt?.transactionHash);
+  }
+  return false;
+}
+
 export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const [draft, setDraft] = useState<ClaimDraft>(() => createInitialClaimDraft());
   const [step, setStep] = useState(0);
@@ -129,6 +145,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const [publishState, setPublishState] = useState<PublishState>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [publicPayload, setPublicPayload] = useState<PublicPayload | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const { address, status, connect } = useWallet();
 
   const seal = draft.privateSeal ?? null;
@@ -139,15 +156,35 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID?.trim() ||
     DEFAULT_VERIFIER_CONTRACT_ID;
 
+  const isTryMode = mode === "demo";
+  const pageTitle = isTryMode ? "Try ZeroSeal" : "Create a private claim";
+  const currentStep = STEPS[step];
+
   const ready = useMemo(() => {
-    if (step === 6) {
-      return reviewed;
+    switch (step) {
+      case 0:
+        return Boolean(draft.reportingContext);
+      case 1:
+        return Boolean(draft.programmeName && draft.targetType);
+      case 2:
+        return Boolean(draft.findingTitle && draft.claimedSeverity && draft.bugCategory);
+      case 3:
+        return Boolean(
+          draft.privateEvidence.vulnerabilityDescription ||
+            draft.privateEvidence.reproductionSteps ||
+            draft.privateEvidence.proofOfConcept ||
+            selectedFiles.length,
+        );
+      case 4:
+        return Boolean(seal);
+      case 5:
+        return reviewed;
+      case 6:
+        return Boolean(seal && reviewed);
+      default:
+        return false;
     }
-    if (step === 7) {
-      return Boolean(seal && reviewed);
-    }
-    return canContinueFromStep(step, draft);
-  }, [draft, reviewed, seal, step]);
+  }, [draft, reviewed, seal, selectedFiles.length, step]);
 
   const update = (patch: Partial<ClaimDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
@@ -163,16 +200,6 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     }));
   };
 
-  const updatePublicClaim = (
-    key: keyof ClaimDraft["publicClaim"],
-    value: string,
-  ) => {
-    setDraft((current) => ({
-      ...current,
-      publicClaim: { ...current.publicClaim, [key]: value },
-    }));
-  };
-
   const continueStep = () => {
     setMessage(null);
     if (step === 3) {
@@ -183,12 +210,13 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     }
   };
 
-  const loadFictionalDemo = () => {
-    setDraft(createFictionalDemoDraft());
+  const loadExample = () => {
+    setDraft(createExampleDemoDraft());
+    setSelectedFiles(["impact-notes.txt", "poc-outline.md"]);
     setReviewed(false);
     setPublicPayload(null);
     setPublishState("idle");
-    setMessage("Fictional example loaded. No real exploit is used.");
+    setMessage("Example claim added. No fingerprint, wallet request or receipt was created.");
   };
 
   const clearPrivateEvidence = () => {
@@ -199,6 +227,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       researcherFingerprint: null,
       privateSeal: null,
     }));
+    setSelectedFiles([]);
     setReviewed(false);
     setPublicPayload(null);
     setMessage("Private evidence cleared from this browser form.");
@@ -206,8 +235,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
 
   const reset = () => {
     setDraft((current) =>
-      mode === "demo" ? createInitialClaimDraft() : resetClaimDraft(current),
+      isTryMode ? createInitialClaimDraft() : resetClaimDraft(current),
     );
+    setSelectedFiles([]);
     setStep(0);
     setReviewed(false);
     setPublicPayload(null);
@@ -226,7 +256,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         researcherFingerprint: nextSeal.researcherFingerprint,
         privateSeal: nextSeal,
       }));
-      setMessage("Private seal generated in this browser.");
+      setMessage("ZeroSeal created this fingerprint automatically from the approved claim and private evidence.");
     } catch (error) {
       update({ state: "FAILED" });
       setMessage(error instanceof Error ? error.message : "Private seal failed.");
@@ -244,6 +274,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     setPublicPayload(payload);
     setReviewed(true);
     update({ state: nextClaimState("SEAL_GENERATED", "reviewPublicClaim") });
+    setMessage("Approved public claim prepared. Private evidence remains local.");
   };
 
   const publish = async () => {
@@ -278,6 +309,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       setMessage("Review the exact Testnet transaction in Freighter.");
 
       const response = await transaction.signAndSend();
+      setPublishState("submitting");
       const hash = extractTransactionHash(response);
       const ledger = extractLedger(response);
 
@@ -314,7 +346,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       }));
       setPublishState("confirmed");
       setMessage("Confirmed on Stellar Testnet. Public receipt is ready.");
-      setStep(8);
+      setStep(7);
     } catch (error) {
       setPublishState("failed");
       update({ state: "FAILED" });
@@ -323,69 +355,80 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   };
 
   return (
-    <div className="claim-flow">
-      <header className="claim-flow__hero">
-        <Link className="receipt-page__back" href="/">
-          &larr; ZeroSeal
+    <div className="claim-flow claim-flow--try">
+      <div className="claim-flow__topbar">
+        <Link className="claim-flow__back" href="/">
+          <span aria-hidden="true">←</span>
+          Back to ZeroSeal
         </Link>
-        <p className="eyebrow">
-          {mode === "demo" ? "SAFE FICTIONAL DEMO" : "CREATE PRIVATE CLAIM"}
-        </p>
-        <h1 className="display display--lg">
-          {mode === "demo"
-            ? "Try an example vulnerability."
-            : "Create a private claim from the beginning."}
-        </h1>
-        <p className="lede">
-          {mode === "demo"
-            ? "ZeroSeal can fill the form with a fictional smart-contract finding. No real exploit is used."
-            : "Build a claim locally, generate a private seal, review the public fields and approve the Testnet action only when ready."}
+        <div className="claim-flow__top-actions">
+          {isTryMode ? (
+            <button className="btn btn--outline btn--sm" type="button" onClick={loadExample}>
+              Load example
+            </button>
+          ) : null}
+          <Link className="btn btn--outline btn--sm" href="/verify">
+            Verify receipt
+          </Link>
+        </div>
+      </div>
+
+      <header className="claim-flow__hero claim-flow__hero--compact">
+        <p className="eyebrow">{isTryMode ? "TRY ZEROSEAL" : "CREATE CLAIM"}</p>
+        <h1>{isTryMode ? "Create an example security claim" : pageTitle}</h1>
+        <p>
+          {isTryMode
+            ? "Use an example claim or enter your own test details. ZeroSeal only records a Testnet action after wallet approval."
+            : "Create a private claim, generate a seal, approve the public fields and record a Testnet action."}
         </p>
       </header>
 
-      <div className="claim-flow__shell">
-        <aside className="claim-flow__progress" aria-label="Claim creation progress">
-          {STEPS.map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              aria-current={step === index ? "step" : undefined}
-              onClick={() => setStep(index)}
-            >
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              {label}
-            </button>
-          ))}
+      <div className="claim-flow__shell claim-flow__shell--app">
+        <aside className="claim-flow__progress claim-flow__progress--rail" aria-label="Claim creation progress">
+          {STEPS.map((label, index) => {
+            const complete = isStepComplete(index, step, draft, reviewed);
+            return (
+              <button
+                key={label}
+                type="button"
+                data-complete={complete}
+                aria-current={step === index ? "step" : undefined}
+                onClick={() => setStep(index)}
+              >
+                <span>{complete ? "" : String(index + 1).padStart(2, "0")}</span>
+                {label}
+              </button>
+            );
+          })}
         </aside>
 
-        <main className="claim-flow__panel">
-          <span className="claim-flow__state">{draft.state ?? "DRAFT"}</span>
-          {mode === "demo" && step === 0 ? (
-            <div className="claim-flow__demo-start">
-              <strong>This demo starts untouched.</strong>
-              <p>
-                Load the fictional example when you are ready. It will not create
-                a fingerprint, wallet request or receipt until you act.
-              </p>
-              <button className="btn btn--yellow" type="button" onClick={loadFictionalDemo}>
-                Fill fictional example
-              </button>
-            </div>
-          ) : null}
+        <main className="claim-flow__panel claim-flow__panel--work">
+          <div className="claim-flow__panel-top">
+            <span>{currentStep}</span>
+            <strong>Step {step + 1} of {STEPS.length}</strong>
+          </div>
 
           {step === 0 ? (
             <section className="claim-step">
-              <h2>Where do you plan to submit this finding?</h2>
-              <p>Used only to describe the reporting context. ZeroSeal does not submit the report to this platform.</p>
-              <div className="claim-choice-grid">
+              <StepHeader
+                title="Choose the reporting path"
+                text="This describes where the report will be handled. ZeroSeal does not submit the private report to the platform."
+              />
+              <div className="platform-grid">
                 {REPORTING_CONTEXTS.map((context) => (
                   <button
                     type="button"
-                    data-selected={draft.reportingContext === context}
-                    key={context}
-                    onClick={() => update({ reportingContext: context })}
+                    data-selected={draft.reportingContext === context.label}
+                    key={context.label}
+                    onClick={() => update({ reportingContext: context.label })}
                   >
-                    {context}
+                    {"logo" in context ? (
+                      <Image src={context.logo} alt="" aria-hidden="true" width={96} height={28} />
+                    ) : (
+                      <span className="platform-grid__mark" aria-hidden="true" />
+                    )}
+                    <strong>{context.label}</strong>
+                    <span className="platform-grid__check" aria-hidden="true" />
                   </button>
                 ))}
               </div>
@@ -394,155 +437,185 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
 
           {step === 1 ? (
             <section className="claim-step">
-              <h2>Programme and target</h2>
-              <div className="claim-fields">
-                <Field label="Programme or project name" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} />
-                <Field label="Programme URL" value={draft.programmeUrl} onChange={(value) => update({ programmeUrl: value })} />
+              <StepHeader
+                title="Describe the programme and target"
+                text="Keep this short. The private evidence comes later and remains local."
+              />
+              <div className="claim-fields claim-fields--compact">
+                <Field label="Programme or project" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} />
+                <Field label="Target name" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} />
                 <SelectField label="Target type" value={draft.targetType} options={TARGET_TYPES} onChange={(value) => update({ targetType: value })} />
-                <Field label="Contract address or repository URL" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} />
-                <Field label="Affected function or component" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} />
-                <Field label="Network or chain" value={draft.network} onChange={(value) => update({ network: value })} />
+                <Field label="Repository or contract address" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} />
               </div>
             </section>
           ) : null}
 
           {step === 2 ? (
             <section className="claim-step">
-              <h2>Finding and severity</h2>
-              <div className="claim-fields">
+              <StepHeader
+                title="Add the finding context"
+                text="Use the public-facing description of the claim. Sensitive details still belong in private evidence."
+              />
+              <div className="claim-fields claim-fields--compact">
                 <Field label="Finding title" value={draft.findingTitle} onChange={(value) => update({ findingTitle: value })} />
-                <Field label="Bug category" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
-                <SelectField label="Claimed severity" value={draft.claimedSeverity} options={SEVERITIES} onChange={(value) => update({ claimedSeverity: value as ClaimDraft["claimedSeverity"] })} />
-                <TextArea label="Short impact statement" value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
-                <Field label="Estimated financial impact when applicable" value={draft.estimatedFinancialImpact} onChange={(value) => update({ estimatedFinancialImpact: value })} />
+                <Field label="Vulnerability category" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
               </div>
+              <Segmented
+                label="Severity"
+                options={SEVERITIES}
+                value={draft.claimedSeverity}
+                onChange={(value) => update({ claimedSeverity: value as ClaimDraft["claimedSeverity"] })}
+              />
+              <TextArea label="Short summary" value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
             </section>
           ) : null}
 
           {step === 3 ? (
             <section className="claim-step">
-              <h2>Private evidence</h2>
-              <p>This evidence stays on your device. It is not written to Stellar. Do not enter an unpatched real vulnerability in this public demo.</p>
-              <div className="claim-fields">
-                <TextArea label="Vulnerability description" value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
-                <TextArea label="Reproduction steps" value={draft.privateEvidence.reproductionSteps} onChange={(value) => updatePrivateEvidence("reproductionSteps", value)} />
-                <Field label="PoC or evidence file reference" value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
-                <Field label="Affected code" value={draft.privateEvidence.affectedCode} onChange={(value) => updatePrivateEvidence("affectedCode", value)} />
-                <TextArea label="Screenshots or logs" value={draft.privateEvidence.screenshotsOrLogs} onChange={(value) => updatePrivateEvidence("screenshotsOrLogs", value)} />
-                <Field label="Expected result" value={draft.privateEvidence.expectedResult} onChange={(value) => updatePrivateEvidence("expectedResult", value)} />
-                <Field label="Actual result" value={draft.privateEvidence.actualResult} onChange={(value) => updatePrivateEvidence("actualResult", value)} />
-                <Field label="Private impact values" value={draft.privateEvidence.privateImpactValues} onChange={(value) => updatePrivateEvidence("privateImpactValues", value)} />
-                <TextArea label="Private notes" value={draft.privateEvidence.privateNotes} onChange={(value) => updatePrivateEvidence("privateNotes", value)} />
+              <StepHeader
+                title="Add private evidence locally"
+                text="Files and sensitive details remain on this device. ZeroSeal does not publish raw evidence."
+              />
+              <div className="privacy-callout">
+                <span aria-hidden="true" />
+                <strong>Private evidence is local until you decide otherwise.</strong>
               </div>
+              <div className="claim-fields claim-fields--compact">
+                <TextArea label="Report text" value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
+                <TextArea label="PoC notes" value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
+                <TextArea label="Reproduction steps" value={draft.privateEvidence.reproductionSteps} onChange={(value) => updatePrivateEvidence("reproductionSteps", value)} />
+                <Field label="Private impact value" value={draft.privateEvidence.privateImpactValues} onChange={(value) => updatePrivateEvidence("privateImpactValues", value)} />
+              </div>
+              <label className="file-picker">
+                <span>Attach local files</span>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(event) =>
+                    setSelectedFiles(
+                      Array.from(event.target.files ?? []).map((file) => file.name),
+                    )
+                  }
+                />
+                <strong>{selectedFiles.length ? `${selectedFiles.length} selected` : "No files selected"}</strong>
+              </label>
               <div className="claim-step__actions">
-                <button className="btn btn--outline btn--sm" type="button" onClick={clearPrivateEvidence}>Clear private evidence</button>
+                <button className="btn btn--outline btn--sm" type="button" onClick={clearPrivateEvidence}>
+                  Clear private evidence
+                </button>
               </div>
             </section>
           ) : null}
 
           {step === 4 ? (
             <section className="claim-step">
-              <h2>Public claim</h2>
-              <p>The supported MVP predicate is: private demonstrated impact meets or exceeds the programme&apos;s published threshold.</p>
-              <div className="claim-fields">
-                <Field label="Public threshold" value={draft.publicClaim.publicThreshold} onChange={(value) => updatePublicClaim("publicThreshold", value)} />
-                <Field label="Policy identifier" value={draft.publicClaim.policyIdentifier} onChange={(value) => updatePublicClaim("policyIdentifier", value)} />
-                <Field label="Policy version" value={draft.publicClaim.policyVersion} onChange={(value) => updatePublicClaim("policyVersion", value)} />
+              <StepHeader
+                title="Generate the private seal"
+                text="ZeroSeal creates the fingerprint only after you click the button."
+              />
+              <div className="seal-panel" data-ready={Boolean(seal)}>
+                <div>
+                  <span>Researcher fingerprint</span>
+                  <strong className="mono">{formatFingerprint(draft.researcherFingerprint)}</strong>
+                  <p>
+                    {seal
+                      ? "ZeroSeal created this fingerprint automatically from the approved claim and private evidence."
+                      : "Not generated. No fingerprint or private seal output exists yet."}
+                  </p>
+                </div>
+                <button className="btn btn--primary btn--sm" type="button" onClick={() => void generateSeal()}>
+                  Generate private seal
+                </button>
               </div>
+              {seal ? (
+                <div className="claim-step__actions">
+                  <button
+                    className="btn btn--outline btn--sm"
+                    type="button"
+                    onClick={() => downloadJson(`${seal.claimIdentifier}-private-recovery.json`, seal.recoveryBundle)}
+                  >
+                    Export private recovery bundle
+                  </button>
+                </div>
+              ) : null}
               <details className="technical-details">
-                <summary>Advanced details</summary>
-                <p>The current demo performs local seal construction and API structural validation. It does not prove generic exploit validity.</p>
+                <summary>Technical details</summary>
+                <p>The browser uses canonical claim data, a private evidence digest and secure random salt to create the local seal. The current circuit proves the supported private impact threshold predicate, not arbitrary exploit validity.</p>
               </details>
             </section>
           ) : null}
 
           {step === 5 ? (
             <section className="claim-step">
-              <h2>Generate private seal</h2>
-              <p>ZeroSeal creates a unique fingerprint from your private claim. It can later show that the claim existed without revealing the private evidence.</p>
-              <button className="btn btn--primary" type="button" onClick={() => void generateSeal()}>
-                Generate private seal
-              </button>
-              <div className="claim-fingerprint">
-                <span>Researcher fingerprint</span>
-                <strong className="mono">{formatFingerprint(draft.researcherFingerprint)}</strong>
+              <StepHeader
+                title="Review the approved public claim"
+                text="This is the privacy boundary. Check it before asking Freighter to record anything."
+              />
+              <div className="claim-review claim-review--split">
+                <section>
+                  <h3>Private and not published</h3>
+                  <ul>
+                    <li>Exploit details</li>
+                    <li>Private files</li>
+                    <li>Reproduction steps</li>
+                    <li>Sensitive witness values</li>
+                  </ul>
+                </section>
+                <section>
+                  <h3>Included in public claim</h3>
+                  <ul>
+                    <li>Reporting context</li>
+                    <li>Target and severity claim</li>
+                    <li>Approved impact statement</li>
+                    <li>Fingerprint and policy identifier</li>
+                  </ul>
+                </section>
               </div>
-              {seal ? (
-                <button
-                  className="btn btn--outline btn--sm"
-                  type="button"
-                  onClick={() => downloadJson(`${seal.claimIdentifier}-private-recovery.json`, seal.recoveryBundle)}
-                >
-                  Export private recovery bundle
-                </button>
-              ) : null}
+              <button className="btn btn--primary btn--sm" type="button" disabled={!seal} onClick={() => void confirmReview()}>
+                Approve public claim
+              </button>
             </section>
           ) : null}
 
           {step === 6 ? (
             <section className="claim-step">
-              <h2>Review before wallet approval</h2>
-              <div className="claim-review">
-                <section>
-                  <h3>Stays private</h3>
-                  <ul>
-                    <li>Exploit details</li>
-                    <li>Reproduction steps</li>
-                    <li>Private files and exact values</li>
-                    <li>Secret salt and full witness</li>
-                  </ul>
-                </section>
-                <section>
-                  <h3>Becomes public</h3>
-                  <ul>
-                    <li>Programme context hash</li>
-                    <li>Target snapshot hash</li>
-                    <li>Public policy and threshold</li>
-                    <li>Researcher fingerprint and nullifier</li>
-                    <li>Researcher public key after wallet approval</li>
-                  </ul>
-                </section>
+              <StepHeader
+                title="Review Testnet action"
+                text="Freighter will show the exact Stellar Testnet transaction before submission."
+              />
+              <div className="publish-summary">
+                <div>
+                  <span>Recorded on Testnet</span>
+                  <strong>Researcher fingerprint and registry action</strong>
+                </div>
+                <div>
+                  <span>Never recorded</span>
+                  <strong>Raw evidence, PoC, private files, salts or witness values</strong>
+                </div>
+                <div>
+                  <span>Wallet</span>
+                  <strong>{address ? "Connected" : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
+                </div>
               </div>
-              <label className="claim-confirm">
-                <input
-                  type="checkbox"
-                  checked={reviewed}
-                  onChange={(event) => {
-                    if (event.target.checked) {
-                      void confirmReview();
-                    } else {
-                      setReviewed(false);
-                    }
-                  }}
-                />
-                I have reviewed the public fields.
-              </label>
+              <div className="claim-step__actions">
+                <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
+                  Connect Freighter
+                </button>
+                <button className="btn btn--primary btn--sm" type="button" disabled={!reviewed || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
+                  {publishState === "awaiting" ? "Approve in Freighter" : "Review Testnet action"}
+                </button>
+              </div>
             </section>
           ) : null}
 
           {step === 7 ? (
             <section className="claim-step">
-              <h2>Publish to Stellar Testnet</h2>
-              <p>Only the approved public claim context and researcher fingerprint are used for the Testnet action. Freighter shows the exact transaction before submission.</p>
-              <div className="claim-publish">
-                <span>Wallet state</span>
-                <strong>{address ? "Connected on Testnet" : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
-                <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
-                  Connect Freighter
-                </button>
-                <button className="btn btn--primary" type="button" disabled={!reviewed || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
-                  {publishState === "awaiting" ? "Approve in Freighter" : "Publish public claim"}
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          {step === 8 ? (
-            <section className="claim-step">
-              <h2>Receipt</h2>
+              <StepHeader
+                title="Receipt"
+                text="ZeroSeal shows a public receipt only after a real confirmed Testnet transaction hash is available."
+              />
               {draft.receipt?.transactionHash ? (
                 <div className="claim-receipt">
-                  <p>Confirmed real Testnet information is available.</p>
                   <dl>
                     <div><dt>Claim identifier</dt><dd>{publicPayload?.claimIdentifier ?? seal?.claimIdentifier}</dd></div>
                     <div><dt>Researcher fingerprint</dt><dd className="mono">{formatFingerprint(seal?.researcherFingerprint)}</dd></div>
@@ -554,30 +627,28 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                   <div className="claim-step__actions">
                     <Link className="btn btn--primary btn--sm" href={`/receipt/${draft.receipt.transactionHash}`}>Open receipt page</Link>
                     <a className="btn btn--outline btn--sm" href={explorerTransactionUrl(draft.receipt.transactionHash)} target="_blank" rel="noreferrer">Open Stellar explorer</a>
-                    {publicPayload ? (
-                      <button className="btn btn--outline btn--sm" type="button" onClick={() => downloadJson(`${publicPayload.claimIdentifier}-public-receipt.json`, publicPayload)}>
-                        Download public receipt
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               ) : (
-                <p>No transaction has been submitted from this browser.</p>
+                <div className="receipt-empty">
+                  <strong>No Testnet receipt yet</strong>
+                  <p>Generate the private seal, approve the public claim and review the Freighter action to create a real receipt.</p>
+                </div>
               )}
             </section>
           ) : null}
 
           {message ? <p className="claim-flow__message" aria-live="polite">{message}</p> : null}
 
-          <footer className="claim-flow__nav">
-            <button className="btn btn--outline" type="button" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
-              Back
+          <footer className="claim-flow__nav claim-flow__nav--compact">
+            <button className="btn btn--outline btn--sm" type="button" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
+              Previous
             </button>
-            <button className="btn btn--outline" type="button" onClick={reset}>
-              Reset claim
+            <button className="btn btn--outline btn--sm" type="button" onClick={reset}>
+              Reset
             </button>
-            {step < 7 ? (
-              <button className="btn btn--primary" type="button" disabled={!ready} onClick={continueStep}>
+            {step < 6 ? (
+              <button className="btn btn--primary btn--sm" type="button" disabled={!ready} onClick={continueStep}>
                 Continue
               </button>
             ) : null}
@@ -585,6 +656,15 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         </main>
       </div>
     </div>
+  );
+}
+
+function StepHeader({ title, text }: { title: string; text: string }) {
+  return (
+    <header className="claim-step__head">
+      <h2>{title}</h2>
+      <p>{text}</p>
+    </header>
   );
 }
 
@@ -643,5 +723,35 @@ function SelectField({
         ))}
       </select>
     </label>
+  );
+}
+
+function Segmented({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <fieldset className="severity-control">
+      <legend>{label}</legend>
+      <div>
+        {options.map((option) => (
+          <button
+            type="button"
+            key={option}
+            data-selected={value === option}
+            onClick={() => onChange(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }

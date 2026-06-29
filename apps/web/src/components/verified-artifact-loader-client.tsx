@@ -44,11 +44,11 @@ const ClientOnlyArtifactLoader =
                 zs-artifact-loader__label
               "
             >
-              PROOF PACKAGE
+              PRIVATE SEAL
             </span>
 
             <strong>
-              Loading sample proof package
+              Preparing private seal input
             </strong>
           </div>
         </div>

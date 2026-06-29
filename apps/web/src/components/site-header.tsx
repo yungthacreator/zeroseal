@@ -5,7 +5,7 @@ import { WalletAction } from "@/components/wallet-action";
 
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/create", label: "Create claim" },
-  { href: "/demo", label: "Safe demo" },
+  { href: "/demo", label: "Try ZeroSeal" },
   { href: "/verify", label: "Verify receipt" },
   { href: "#why-zeroseal", label: "Why ZeroSeal" },
   { href: "#how-it-works", label: "How it works" },

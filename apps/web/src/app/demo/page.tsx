@@ -1,9 +1,9 @@
 import { ClaimWizard } from "@/components/claim-wizard";
 
 export const metadata = {
-  title: "Try an example vulnerability | ZeroSeal",
+  title: "Try ZeroSeal",
   description:
-    "Walk through ZeroSeal with a fictional smart-contract finding. No real exploit is used.",
+    "Create an example ZeroSeal security claim and record a real Stellar Testnet action after wallet approval.",
 };
 
 export default function DemoPage() {

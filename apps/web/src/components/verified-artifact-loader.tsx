@@ -288,11 +288,11 @@ export function VerifiedArtifactLoader({
 
   const status =
     state === "checking"
-      ? "Checking proof package"
+      ? "Preparing approved claim package"
       : state === "ready"
-        ? "Artifact structurally checked"
+        ? "Ready when you choose it"
         : state === "loaded"
-          ? "Sample proof package loaded"
+          ? "Private seal ready"
           : "Artifact unavailable";
 
   return (
@@ -322,7 +322,7 @@ export function VerifiedArtifactLoader({
 
       <div className="zs-artifact-loader__content">
         <span className="zs-artifact-loader__label">
-          PROOF PACKAGE
+          PRIVATE SEAL INPUT
         </span>
 
         <strong>{status}</strong>
@@ -333,7 +333,7 @@ export function VerifiedArtifactLoader({
             {" · "}
             base64 {artifact.commitmentBase64}
             {" · "}
-            static demo artifact
+            approved example artifact
           </small>
         ) : null}
 
@@ -363,8 +363,8 @@ export function VerifiedArtifactLoader({
         disabled={!artifact || state === "checking"}
       >
         {state === "loaded"
-          ? "Loaded"
-          : "Load sample proof package"}
+          ? "Seal prepared"
+          : "Prepare private seal"}
       </button>
     </div>
   );

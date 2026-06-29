@@ -1,4 +1,4 @@
-# ZeroSeal Demo Runbook
+# Try ZeroSeal Runbook
 
 ## Open
 - Live frontend: `https://zeroseal.vercel.app`.
@@ -14,10 +14,10 @@
 - API env includes `DATABASE_URL`, `REDIS_URL`, `CORS_ALLOWED_ORIGINS`, Stellar Testnet URLs, registry contract ID and verifier contract ID.
 - Worker is running either as the local standalone process or embedded in the API with `RUN_EMBEDDED_WORKER=true`.
 
-## Exact Demo Fixture
-- Programme: `ZeroSeal Security Impact Demo`.
-- Programme ID: `zeroseal-security-impact-demo`.
-- Snapshot ID: `security-impact-demo-v1`.
+## Exact Try ZeroSeal Fixture
+- Programme: `ZeroSeal Security Impact Registry`.
+- Programme ID: `zeroseal-security-impact-testnet`.
+- Snapshot ID: `security-impact-testnet-v1`.
 - Policy ID: `published-impact-threshold-v1`.
 - Circuit: `security-impact-v1`, version `v1`.
 - Proof artifact: `apps/web/public/zeroseal/browser-claim.json`.
@@ -26,10 +26,10 @@
 
 ## Five-Minute Sequence
 1. Open `https://zeroseal.vercel.app` and state the trust problem: researchers need to prove impact without revealing exploit details.
-2. Show the homepage entry points: Create a private claim, Try a safe fictional demo, and Verify a public receipt.
-3. Open `/demo` and point out that the demo starts untouched.
-4. Click the fictional demo fill action, then review the programme, target, finding, severity and public threshold.
-5. Open the private evidence step and explain that these values stay in the browser. Do not enter an unpatched real vulnerability in a public demo.
+2. Show the homepage entry points: Create claim, Try ZeroSeal, and Verify receipt.
+3. Open `/demo` and point out that Try ZeroSeal starts empty.
+4. Click Load example, then review the programme, target, finding, severity and public threshold.
+5. Open the private evidence step and explain that these values stay in the browser. Do not enter an unpatched real vulnerability in the public app.
 6. Click Generate private seal. Only now show the researcher fingerprint, nullifier, private evidence digest and recovery bundle.
 7. Review the public payload and confirm that reproduction steps, raw evidence, private witness values, salt and unpublished report text are absent.
 8. Connect desktop Freighter on Testnet only when the presenter intentionally wants to publish.

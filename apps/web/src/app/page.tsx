@@ -5,6 +5,7 @@ import { HeroActions } from "@/components/hero-actions";
 import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
 import { OnChainActivity } from "@/components/on-chain-activity";
 import { ProductStatusTerminal } from "@/components/product-status-terminal";
+import { ResearcherRegistration } from "@/components/researcher-registration";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
@@ -33,37 +34,41 @@ const TRUST_POINTS = [
   "Confirmed actions receive a Testnet receipt",
 ] as const;
 
-const PAIN_POINTS = [
+const TRUST_GAP_ROWS = [
   {
-    title: "Reveal too early",
-    text: "The complete exploit may be exposed before protection or clear terms exist.",
+    tension: "Early triage",
+    current: "The reporter shares sensitive mechanics before the programme has made a decision.",
+    zeroseal: "The reporter creates a private seal and exposes only the approved public claim.",
   },
   {
-    title: "Duplicate disputes",
-    text: "Researchers may receive a duplicate decision without enough overlap context.",
+    tension: "Overlap review",
+    current: "Duplicate decisions often sit inside one platform or inbox.",
+    zeroseal: "A policy-linked fingerprint and nullifier give both sides a public reference.",
   },
   {
-    title: "Severity disputes",
-    text: "Impact negotiations can begin before the evidence is handled safely.",
+    tension: "Impact confidence",
+    current: "Severity is negotiated while raw evidence is still risky to move around.",
+    zeroseal: "The public threshold and private seal separate impact signal from exploit detail.",
   },
   {
-    title: "Programme risk",
-    text: "Teams must separate serious claims from incomplete or exaggerated reports.",
+    tension: "Public record",
+    current: "The proof trail stays fragmented across screenshots, ticket notes and private mail.",
+    zeroseal: "A confirmed Stellar Testnet action creates an inspectable receipt after approval.",
   },
 ] as const;
 
 const SOLUTION_CARDS = [
   {
     title: "Keep the evidence private",
-    text: "Exploit code, exact values and reproduction steps stay on the researcher's device.",
+    text: "Reports, PoCs, screenshots, notes and witness values stay on the researcher's device.",
   },
   {
     title: "Present only the approved claim",
-    text: "The proof package exposes permitted public inputs, not the complete witness.",
+    text: "ZeroSeal prepares the programme, threshold, fingerprint and nullifier as public fields.",
   },
   {
     title: "Create a durable public record",
-    text: "A confirmed action produces an inspectable Testnet transaction and receipt.",
+    text: "After wallet approval, Stellar Testnet records an inspectable registry action and receipt.",
   },
 ] as const;
 
@@ -83,7 +88,7 @@ const ZEROSEAL_DISCLOSURE = [
 
 const FOOTER_PRODUCT_LINKS = [
   { label: "Why ZeroSeal", href: "#why-zeroseal" },
-  { label: "Demo", href: "#guided-demo" },
+  { label: "Try ZeroSeal", href: "/demo" },
   { label: "Create claim", href: "/create" },
   { label: "How it works", href: "#how-it-works" },
   { label: "Network activity", href: "#network-activity" },
@@ -131,7 +136,7 @@ export default function Home() {
               </ol>
               <p>
                 <span className="live-dot" aria-hidden="true" />
-                Create, demo or verify on Stellar Testnet
+                Create, try or verify on Stellar Testnet
               </p>
             </div>
           </div>
@@ -141,33 +146,34 @@ export default function Home() {
 
         <CredibilityMarquee />
 
-        <section className="section section--cream story-section" id="why-zeroseal">
+        <section className="section section--cream story-section trust-gap" id="why-zeroseal">
           <div className="shell">
-            <div className="story-split">
+            <div className="trust-gap__layout">
               <header className="section__head">
                 <p className="eyebrow">THE DISCLOSURE TRUST GAP</p>
                 <h2 className="display display--lg">
-                  Researchers should not have to reveal everything just to be
-                  believed.
+                  Close the trust gap before the exploit moves.
                 </h2>
                 <p className="lede">
-                  Researchers may need to expose sensitive details before scope,
-                  severity or payment is agreed. Programmes still need enough
-                  assurance to identify a serious claim.
+                  ZeroSeal gives researchers and programmes a shared proof
+                  surface before private exploit detail leaves the reporter.
                 </p>
               </header>
-              <div className="story-grid story-grid--four">
-                {PAIN_POINTS.map((card) => (
-                  <article className="story-card" key={card.title}>
-                    <h3>{card.title}</h3>
-                    <p>{card.text}</p>
+              <div className="trust-gap__matrix" aria-label="Disclosure trust gap comparison">
+                <div className="trust-gap__matrix-head">
+                  <span>Risk point</span>
+                  <span>Traditional path</span>
+                  <span>ZeroSeal path</span>
+                </div>
+                {TRUST_GAP_ROWS.map((row) => (
+                  <article className="trust-gap__row" key={row.tension}>
+                    <h3>{row.tension}</h3>
+                    <p>{row.current}</p>
+                    <p>{row.zeroseal}</p>
                   </article>
                 ))}
               </div>
             </div>
-            <p className="story-closing">
-              Both sides are asked to trust too early.
-            </p>
           </div>
         </section>
 
@@ -177,7 +183,7 @@ export default function Home() {
               <header className="section__head">
                 <p className="eyebrow">THE ZEROSEAL LAYER</p>
                 <h2 className="display display--lg">
-                  A safer middle step between discovery and disclosure.
+                  A verification layer between discovery and disclosure.
                 </h2>
                 <p className="lede">
                   Private evidence stays with the researcher. Only the approved
@@ -219,6 +225,8 @@ export default function Home() {
           </div>
         </section>
 
+        <ResearcherRegistration />
+
         <section className="section section--dotted" id="how-it-works">
           <div className="shell">
             <header className="section__head section__head--split">
@@ -237,8 +245,6 @@ export default function Home() {
           </div>
         </section>
 
-        <OnChainActivity />
-
         <section className="section section--cream" id="network-activity">
           <div className="shell">
             <header className="section__head section__head--split">
@@ -253,6 +259,7 @@ export default function Home() {
                 or retained receipt exists.
               </p>
             </header>
+            <OnChainActivity />
             <StellarActivity />
           </div>
         </section>
