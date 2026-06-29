@@ -14,7 +14,7 @@
 | Evidence files remain local | Implemented locally | Browser evidence manifest | File contents are read locally for hashing and are not sent to the API |
 | Evidence commitment attached to claim | Implemented locally | `POST /api/v1/claims/:claimId/evidence` | Stored as local or claim-attached metadata |
 | Evidence commitment constrained by `security-impact-v1` | Not supported | Proof public inputs | v1 has no `evidence_commitment` public input |
-| Researcher commitment | Structurally validated | Supported proof artifact public inputs | Must not be confused with evidence commitment |
+| Researcher fingerprint | Structurally validated | Supported proof artifact public inputs | Technical name: researcher commitment. Must not be confused with the local evidence seal |
 | Proof artifact digest | Structurally validated | API proof validator | Digest is calculated from submitted artifact payload |
 | Public-input digest | Structurally validated | API proof validator | Digest covers ordered accepted public inputs |
 | `security-impact-v1` proof artifact shape | Structurally validated | `ProofService` | Schema, byte lengths, public input ordering and digests are checked |
@@ -29,4 +29,4 @@
 | Semantic duplicate detection | Roadmap | Future product research | Not claimed |
 | Automated bounty escrow | Roadmap | Future settlement design | Not implemented |
 | Verification credits | Roadmap commercially | Payment and credit models | Demo code exists but production billing is not live |
-| Ecosystem logo/text marquee | Implemented and live after frontend deploy | Homepage component | Independent project, no affiliation or endorsement implied |
+| Ecosystem logo strip | Implemented and live after frontend deploy | Homepage component and `docs/BRAND_ASSETS.md` | Uses only locally stored, verified official assets |

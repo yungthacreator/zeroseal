@@ -1,144 +1,55 @@
-"use client";
-
-import { useState } from "react";
-
-const JOURNEY = [
+const USE_CASES = [
   {
-    title: "Connect",
-    body: "Connect Freighter on Stellar Testnet.",
+    title: "Private impact verification",
+    text: "Show that a vulnerability meets a published loss or severity threshold without revealing the complete exploit first.",
+    label: "Current focus",
   },
   {
-    title: "Choose the claim",
-    body: "Select the programme, snapshot, impact policy and supported circuit.",
+    title: "Priority and authorship record",
+    text: "Create a time-linked public record of the approved researcher fingerprint and confirmed registry action.",
+    label: "Current focus",
   },
   {
-    title: "Prepare privately",
-    body: "Keep exploit details, reproduction steps, sensitive code paths and witness values on the researcher device.",
+    title: "Safer staged disclosure",
+    text: "Share the public claim first, complete programme review second, and disclose the full technical report through an agreed private channel.",
+    label: "Current focus",
   },
   {
-    title: "Prove",
-    body: "Generate or load the approved proof artifact and permitted public inputs.",
+    title: "Future duplicate-proof circuits",
+    text: "A future programme-specific circuit could prove that two private submissions satisfy a defined overlap rule without exposing the earlier report.",
+    label: "Future extension",
   },
-  {
-    title: "Authorise",
-    body: "Review and sign the Stellar transaction in Freighter.",
-  },
-  {
-    title: "Verify",
-    body: "The proof is checked against the declared programme policy and public inputs.",
-  },
-  {
-    title: "Record",
-    body: "The confirmed Claim Registry transaction produces a replay-resistant receipt.",
-  },
-  {
-    title: "Inspect",
-    body: "Open the real transaction and related account or contracts in a Stellar Explorer.",
-  },
-] as const;
-
-const THRESHOLD_FLOW = [
-  "authenticated source",
-  "committed private value",
-  "threshold circuit",
-  "public statement",
-  "verifiable receipt",
 ] as const;
 
 export function UseCaseEngine() {
-  const [active, setActive] = useState(0);
-  const step = JOURNEY[active];
-
   return (
-    <div className="researcher-journey">
-      <div className="researcher-journey__intro">
+    <div className="security-use-cases">
+      <div className="security-use-cases__intro">
         <p className="eyebrow">Use cases</p>
         <h2 className="display display--lg">
-          How a researcher uses ZeroSeal
+          Security workflows first.
         </h2>
         <p className="lede">
-          The live path starts with a security-impact claim: private exploit
-          evidence stays local while public inputs, commitments and wallet
-          authorisation move through Stellar.
+          ZeroSeal is shaped for security researchers and programmes that need a
+          safer path between private evidence and public assurance.
         </p>
       </div>
 
-      <div
-        className="researcher-journey__body"
-        role="group"
-        aria-label="Security research workflow"
-      >
-        <ol className="researcher-journey__index">
-          {JOURNEY.map((item, index) => (
-            <li key={item.title}>
-              <button
-                type="button"
-                onClick={() => setActive(index)}
-                aria-current={index === active ? "step" : undefined}
-              >
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {item.title}
-              </button>
-            </li>
-          ))}
-        </ol>
-
-        <section className="researcher-journey__panel">
-          <span>{String(active + 1).padStart(2, "0")}</span>
-          <h3>{step.title}</h3>
-          <p>{step.body}</p>
-          <div className="researcher-journey__controls">
-            <button
-              type="button"
-              onClick={() =>
-                setActive((current) =>
-                  current === 0 ? JOURNEY.length - 1 : current - 1,
-                )
-              }
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setActive((current) => (current + 1) % JOURNEY.length)
-              }
-            >
-              Next
-            </button>
-          </div>
-        </section>
+      <div className="security-use-cases__grid">
+        {USE_CASES.map((item) => (
+          <article key={item.title}>
+            <span>{item.label}</span>
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+            {item.title === "Priority and authorship record" ? (
+              <small>
+                This record supports review, but does not by itself legally
+                prove authorship.
+              </small>
+            ) : null}
+          </article>
+        ))}
       </div>
-
-      <section className="threshold-scenario">
-        <div>
-          <p className="eyebrow">Illustrative threshold-proof scenario</p>
-          <h3>What the same proof pattern can unlock</h3>
-          <dl>
-            <div>
-              <dt>Public statement</dt>
-              <dd>Profit exceeded $1M.</dd>
-            </div>
-            <div>
-              <dt>Private source</dt>
-              <dd>Exact $24.25M result and complete account history.</dd>
-            </div>
-            <div>
-              <dt>Value</dt>
-              <dd>
-                A fund, market maker, exchange or treasury can prove a
-                threshold without disclosing exact balances, strategy or full
-                history.
-              </dd>
-            </div>
-          </dl>
-        </div>
-        <ol aria-label="Illustrative threshold proof transformation">
-          {THRESHOLD_FLOW.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ol>
-      </section>
     </div>
   );
 }

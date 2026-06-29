@@ -365,18 +365,18 @@ Issued receipt semantics are immutable.
 
 ```text
 zeroseal/
-├── apps/
-│   ├── api/                     NestJS API and verification worker
-│   └── web/                     Next.js application
-├── circuits/                    Noir proof circuits
-├── contracts/                   Soroban contracts
-├── packages/
-│   └── claim-registry-client/   Shared Claim Registry client
-├── docs/                        Runbooks, glossary and truth matrix
-├── scripts/                     Development and validation scripts
-├── docker-compose.dev.yml       PostgreSQL and Redis services
-├── package.json                 Workspace commands
-└── README.md
++-- apps/
+|   +-- api/                     NestJS API and verification worker
+|   +-- web/                     Next.js application
++-- circuits/                    Noir proof circuits
++-- contracts/                   Soroban contracts
++-- packages/
+|   +-- claim-registry-client/   Shared Claim Registry client
++-- docs/                        Runbooks, glossary and truth matrix
++-- scripts/                     Development and validation scripts
++-- docker-compose.dev.yml       PostgreSQL and Redis services
++-- package.json                 Workspace commands
++-- README.md
 ```
 
 ## Technology
@@ -668,7 +668,25 @@ The included Render blueprint is designed for a zero-cost production demo:
 
 The API runs the verification and reconciliation worker in the same web process when `RUN_EMBEDDED_WORKER=true`. PostgreSQL remains the source of truth. Redis is only the queue transport, and queued work is recovered from persisted PostgreSQL records when the API starts or when Redis becomes available again.
 
+The blueprint pins the API service to `feat/testnet-browser-integration`, uses `autoDeployTrigger: commit` and does not set an `API_PUBLIC_URL` placeholder. Production public URL resolution relies on an explicit `API_PUBLIC_URL` only when supplied, then Render's `RENDER_EXTERNAL_URL`.
+
 See `docs/RENDER_DEPLOYMENT.md` for the exact blueprint and Vercel connection steps.
+
+## Homepage Story
+
+The frontend now introduces ZeroSeal in this order:
+
+1. Hero.
+2. Disclosure pain point.
+3. ZeroSeal verification layer.
+4. Guided product tour.
+5. Simple how-it-works flow.
+6. Security disclosure ecosystem logos.
+7. Live Testnet workspace.
+8. Network activity and receipts.
+9. Security use cases and business model.
+10. Product status.
+11. Footer.
 
 ## Roadmap
 

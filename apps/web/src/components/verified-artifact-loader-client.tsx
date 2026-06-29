@@ -44,11 +44,11 @@ const ClientOnlyArtifactLoader =
                 zs-artifact-loader__label
               "
             >
-              PROOF ARTIFACT
+              PROOF PACKAGE
             </span>
 
             <strong>
-              Loading proof artifact
+              Loading sample proof package
             </strong>
           </div>
         </div>

@@ -4,9 +4,10 @@ import { useState } from "react";
 import { WalletAction } from "@/components/wallet-action";
 
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
+  { href: "#why-zeroseal", label: "Why ZeroSeal" },
+  { href: "#guided-demo", label: "Guided demo" },
   { href: "#how-it-works", label: "How it works" },
-  { href: "#use-cases", label: "Use cases" },
-  { href: "#proof-workspace", label: "Proof workspace" },
+  { href: "#proof-workspace", label: "Live workspace" },
   { href: "#network-activity", label: "Network activity" },
 ];
 

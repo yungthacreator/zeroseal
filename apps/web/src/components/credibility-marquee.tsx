@@ -1,16 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
 
 const ECOSYSTEMS = [
   {
     name: "Immunefi",
     logo: "/brands/immunefi.svg",
-  },
-  {
-    name: "Sherlock",
-    logo: null,
   },
   {
     name: "Code4rena",
@@ -21,22 +16,12 @@ const ECOSYSTEMS = [
     logo: "/brands/cantina.svg",
   },
   {
-    name: "Hats Finance",
-    logo: null,
-  },
-  {
     name: "CodeHawks",
-    logo: null,
+    logo: "/brands/codehawks.svg",
   },
 ] as const;
 
 function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
-  const [failed, setFailed] = useState(false);
-
-  if (!item.logo || failed) {
-    return <span className="credibility-marquee__wordmark">{item.name}</span>;
-  }
-
   return (
     <span className="credibility-marquee__logo-wrap">
       <Image
@@ -47,11 +32,7 @@ function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
         height={48}
         loading="lazy"
         unoptimized
-        onError={() => setFailed(true)}
       />
-      <span className="credibility-marquee__fallback" aria-hidden="true">
-        {item.name}
-      </span>
     </span>
   );
 }
@@ -76,15 +57,15 @@ export function CredibilityMarquee() {
     >
       <div className="shell">
         <h2 className="eyebrow" id="credibility-marquee-title">
-          DESIGNED FOR MODERN SECURITY DISCLOSURE
+          SECURITY DISCLOSURE ECOSYSTEM
         </h2>
+        <h3 className="display display--md">
+          Designed for the workflows researchers already use.
+        </h3>
         <p className="credibility-marquee__lede">
-          ZeroSeal is designed to complement the workflows used by security
-          researchers, audit firms and vulnerability reward programmes.
-        </p>
-        <p className="credibility-marquee__label">
-          Designed to complement workflows across security research ecosystems
-          such as
+          ZeroSeal can complement existing research, audit and vulnerability
+          disclosure processes by adding a privacy-preserving verification and
+          receipt layer.
         </p>
         <div
           className="credibility-marquee__viewport"

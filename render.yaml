@@ -13,6 +13,8 @@ services:
     rootDir: apps/api
     plan: free
     region: oregon
+    branch: feat/testnet-browser-integration
+    autoDeployTrigger: commit
     buildCommand: npm ci && npm run prisma:generate && npm run build
     preDeployCommand: npx prisma migrate deploy
     startCommand: node dist/main.js
@@ -51,8 +53,6 @@ services:
         value: https://stellar.expert/explorer/testnet/account
       - key: EXPLORER_CONTRACT_BASE_URL
         value: https://stellar.expert/explorer/testnet/contract
-      - key: API_PUBLIC_URL
-        sync: false
       - key: LOG_LEVEL
         value: info
 

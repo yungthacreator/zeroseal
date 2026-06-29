@@ -10,6 +10,8 @@ The free Render blueprint creates only:
 
 There is no separate Render worker service. Free Render does not provide a separate always-on background worker, so the API starts an embedded BullMQ worker when `RUN_EMBEDDED_WORKER=true`.
 
+The `zeroseal-api` service is pinned to `branch: feat/testnet-browser-integration` with `autoDeployTrigger: commit`.
+
 ## Source of Truth
 
 PostgreSQL is the source of truth for claims, proof artifacts, verification jobs, transactions and receipts. Redis is used only as a queue transport. If Redis restarts, the API can recover queued verification and reconciliation work from PostgreSQL.
@@ -25,6 +27,8 @@ The API resolves its public URL in this order:
 1. `API_PUBLIC_URL`
 2. `RENDER_EXTERNAL_URL`
 3. Local development fallback only when `NODE_ENV=development`
+
+Production has no localhost fallback. The blueprint does not set an `API_PUBLIC_URL` placeholder; Render supplies `RENDER_EXTERNAL_URL`.
 
 Required production values:
 
@@ -49,12 +53,13 @@ Do not set wildcard CORS origins.
 ## Blueprint Steps
 
 1. Connect the repository to Render.
-2. Select the `feat/testnet-browser-integration` branch or merge it before deploying from the production branch.
+2. Confirm the blueprint is using `branch: feat/testnet-browser-integration`.
 3. Apply `render.yaml`.
 4. Confirm every resource uses `plan: free`.
 5. Confirm there is no `type: worker` service.
-6. Let `preDeployCommand` run `npx prisma migrate deploy`.
-7. Open `/health` and `/ready`.
+6. Confirm there is no `sync: false` value.
+7. Let `preDeployCommand` run `npx prisma migrate deploy`.
+8. Open `/health` and `/ready`.
 
 `/health` checks the web process. `/ready` checks both PostgreSQL and Redis.
 

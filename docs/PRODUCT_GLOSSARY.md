@@ -15,11 +15,15 @@ The approved proof logic that determines which private values and public inputs 
 ## Claim
 One user workflow from draft through verification and receipt issuance.
 
-## Researcher Commitment
-The stable commitment contained in the supported proof artifact and used by the researcher registration flow. It is not an evidence hash and must not change when evidence files change.
+## Researcher Fingerprint
+The user-facing name for the stable cryptographic value read automatically from the supported proof artifact. It is used by the researcher registration flow, does not reveal the private witness and is not calculated or pasted manually by the user.
 
-## Evidence Commitment
+Technical name: researcher commitment.
+
+## Local Evidence Seal
 A digest calculated locally from selected evidence files. The raw files remain on the researcher's device and are not uploaded to the API. In the current v1 workflow the digest may be attached to a claim, but the active circuit does not yet prove that these files produced the proof.
+
+Technical name: evidence manifest commitment.
 
 ## Proof Artifact
 The encoded zero-knowledge proof and its approved public inputs.

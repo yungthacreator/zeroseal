@@ -283,7 +283,7 @@ export function ReceiptPanel({ receipt }: { receipt: ReceiptData }) {
           type="button"
           onClick={() => void copyValue("json", receiptJson)}
         >
-          {copied === "json" ? "Copied" : "Copy receipt JSON"}
+          {copied === "json" ? "Copied" : "Copy public receipt"}
         </button>
         {receiptUrl ? (
           <button type="button" onClick={() => void shareReceipt()}>

@@ -5,7 +5,7 @@
 ZeroSeal must ship with:
 
 1. A public open-source repository.
-2. A 2–3 minute working demo video.
+2. A 2-3 minute working demo video.
 3. Meaningful zero-knowledge cryptography.
 4. Proof verification inside a Stellar smart contract.
 

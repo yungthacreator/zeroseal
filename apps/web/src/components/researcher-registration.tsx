@@ -55,6 +55,7 @@ type RegistrationLookupState =
   | "error";
 
 type NodeState = "pending" | "checking" | "verified" | "warning" | "failed";
+type WorkspaceMode = "guided" | "live" | "technical";
 
 type RailNode = {
   id: string;
@@ -204,7 +205,7 @@ function readableWalletError(error: unknown): string {
   const message = contractErrorMessage(error);
 
   if (isResearcherAlreadyRegistered(error)) {
-    return "This wallet already has a registered commitment.";
+    return "This wallet already has a registered researcher fingerprint.";
   }
 
   if (
@@ -247,7 +248,7 @@ function buttonLabel(
     case "confirmed":
       return "Registration confirmed";
     default:
-      return "Register commitment";
+      return "Continue to wallet approval";
   }
 }
 
@@ -317,6 +318,8 @@ export function ResearcherRegistration() {
   const [restoredReceipt, setRestoredReceipt] =
     useState<StoredReceipt | null>(null);
   const [reconciliationNonce, setReconciliationNonce] = useState(0);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("guided");
+  const [showTechnicalCommitment, setShowTechnicalCommitment] = useState(false);
   const [registrationLookup, setRegistrationLookup] = useState<{
     key: string;
     state: RegistrationLookupState;
@@ -443,11 +446,11 @@ export function ResearcherRegistration() {
       try {
         await submitBackendProof(claim.id, loadedArtifact.rawArtifact);
         setClaimStatus("PROOF_RECEIVED");
-        setBackendMessage("Proof artifact structurally validated.");
+        setBackendMessage("Artifact structurally checked.");
 
         await requestBackendVerification(claim.id);
         setClaimStatus("VERIFYING");
-        setBackendMessage("Verification job queued.");
+        setBackendMessage("Public claim inputs accepted.");
       } catch (error) {
         setBackendMessage(
           isApiError(error)
@@ -668,7 +671,7 @@ export function ResearcherRegistration() {
         });
         setSubmissionState("error");
         setMessage(
-          "This wallet is registered with a different commitment.",
+          "This wallet is registered with a different researcher fingerprint.",
         );
       } catch (error) {
         if (cancelled) {
@@ -756,8 +759,8 @@ export function ResearcherRegistration() {
     if (walletConnected && address) {
       return {
         id: "wallet",
-        label: "Wallet connected",
-        value: shortenAddress(address),
+        label: "Wallet",
+        value: "Connected",
         full: address,
         state: "verified",
       };
@@ -766,7 +769,7 @@ export function ResearcherRegistration() {
     if (walletStatus === "unavailable") {
       return {
         id: "wallet",
-        label: "Wallet connected",
+        label: "Wallet",
         value: "Desktop signing required",
         state: "warning",
       };
@@ -775,8 +778,8 @@ export function ResearcherRegistration() {
     if (walletStatus === "wrong_network" || walletStatus === "error") {
       return {
         id: "wallet",
-        label: "Wallet connected",
-        value: "Wallet unavailable",
+        label: "Wallet",
+        value: "Action failed",
         state: "failed",
       };
     }
@@ -784,7 +787,7 @@ export function ResearcherRegistration() {
     if (walletStatus === "rejected") {
       return {
         id: "wallet",
-        label: "Wallet connected",
+        label: "Wallet",
         value: "Connection cancelled",
         state: "warning",
       };
@@ -793,7 +796,7 @@ export function ResearcherRegistration() {
     if (walletConnecting) {
       return {
         id: "wallet",
-        label: "Wallet connected",
+        label: "Wallet",
         value: "Connecting",
         state: "checking",
       };
@@ -801,8 +804,8 @@ export function ResearcherRegistration() {
 
     return {
       id: "wallet",
-      label: "Wallet connected",
-      value: "Connect wallet",
+      label: "Wallet",
+      value: "Not connected",
       state: "pending",
     };
   })();
@@ -811,8 +814,8 @@ export function ResearcherRegistration() {
     if (!walletConnected) {
       return {
         id: "network",
-        label: "Network confirmed",
-        value: "Stellar Testnet",
+        label: "Network",
+        value: "Not connected",
         state: "pending",
       };
     }
@@ -820,13 +823,13 @@ export function ResearcherRegistration() {
     return correctNetwork
       ? {
           id: "network",
-          label: "Network confirmed",
-          value: "Stellar Testnet",
+          label: "Network",
+          value: "Testnet selected",
           state: "verified",
         }
       : {
           id: "network",
-          label: "Network confirmed",
+          label: "Network",
           value: "Wrong network",
           state: "warning",
         };
@@ -834,7 +837,7 @@ export function ResearcherRegistration() {
 
   const registryNode: RailNode = {
     id: "registry",
-    label: "Registry configured",
+    label: "Claim Registry",
     value: shortenAddress(registryContractId),
     full: registryContractId,
     state: "verified",
@@ -844,8 +847,8 @@ export function ResearcherRegistration() {
     if (registrationState === "matched") {
       return {
         id: "commitment",
-        label: "Proof artifact status",
-        value: "Registered",
+        label: "Proof package",
+        value: "Receipt issued",
         state: "verified",
       };
     }
@@ -853,7 +856,7 @@ export function ResearcherRegistration() {
     if (registrationState === "mismatch") {
       return {
         id: "commitment",
-        label: "Proof artifact status",
+        label: "Proof package",
         value: "Different value registered",
         state: "failed",
       };
@@ -862,11 +865,11 @@ export function ResearcherRegistration() {
     if (validCommitment) {
       return {
         id: "commitment",
-        label: "Proof artifact status",
+        label: "Proof package",
         value:
           registrationState === "checking"
             ? "Checking registry"
-            : "64 hex loaded",
+            : "Package loaded",
         state:
           registrationState === "checking"
             ? "checking"
@@ -876,17 +879,17 @@ export function ResearcherRegistration() {
 
     if (normalizedCommitment.length > 0) {
       return {
-        id: "commitment",
-        label: "Proof artifact status",
-        value: `${normalizedCommitment.length}/64 hex`,
+      id: "commitment",
+      label: "Proof package",
+      value: `${normalizedCommitment.length}/64 hex`,
         state: "warning",
       };
     }
 
     return {
       id: "commitment",
-      label: "Proof artifact status",
-      value: "Not loaded",
+      label: "Proof package",
+      value: "Package not loaded",
       state: "pending",
     };
   })();
@@ -899,7 +902,7 @@ export function ResearcherRegistration() {
     ) {
       return {
         id: "signature",
-        label: "Registration transaction",
+        label: "Wallet approval",
         value: "Authorised",
         state: "verified",
       };
@@ -908,7 +911,7 @@ export function ResearcherRegistration() {
     if (submissionState === "awaiting-signature") {
       return {
         id: "signature",
-        label: "Registration transaction",
+        label: "Wallet approval",
         value: "Awaiting approval",
         state: "checking",
       };
@@ -916,8 +919,8 @@ export function ResearcherRegistration() {
 
     return {
       id: "signature",
-      label: "Registration transaction",
-      value: "Pending",
+      label: "Wallet approval",
+      value: "Ready for wallet",
       state: "pending",
     };
   })();
@@ -926,8 +929,8 @@ export function ResearcherRegistration() {
     if (registrationState === "matched" || submissionState === "confirmed") {
       return {
         id: "confirmation",
-        label: "Transaction confirmation",
-        value: "Registration confirmed",
+        label: "Stellar confirmation",
+        value: "Confirmed",
         state: "verified",
       };
     }
@@ -935,7 +938,7 @@ export function ResearcherRegistration() {
     if (registrationState === "checking") {
       return {
         id: "confirmation",
-        label: "Transaction confirmation",
+        label: "Stellar confirmation",
         value: "Checking Testnet",
         state: "checking",
       };
@@ -944,7 +947,7 @@ export function ResearcherRegistration() {
     if (registrationState === "mismatch") {
       return {
         id: "confirmation",
-        label: "Transaction confirmation",
+        label: "Stellar confirmation",
         value: "Commitment conflict",
         state: "failed",
       };
@@ -953,8 +956,8 @@ export function ResearcherRegistration() {
     if (registrationState === "error") {
       return {
         id: "confirmation",
-        label: "Transaction confirmation",
-        value: "Verification unavailable",
+        label: "Stellar confirmation",
+        value: "Action failed",
         state: "warning",
       };
     }
@@ -962,8 +965,8 @@ export function ResearcherRegistration() {
     if (submissionState === "submitting") {
       return {
         id: "confirmation",
-        label: "Transaction confirmation",
-        value: "Confirming",
+        label: "Stellar confirmation",
+        value: "Submitted",
         state: "checking",
       };
     }
@@ -971,23 +974,23 @@ export function ResearcherRegistration() {
     if (submissionState === "error") {
       return {
         id: "confirmation",
-        label: "Transaction confirmation",
-        value: "Failed",
+        label: "Stellar confirmation",
+        value: "Action failed",
         state: "failed",
       };
     }
 
     return {
       id: "confirmation",
-      label: "Transaction confirmation",
-      value: "Pending",
+      label: "Stellar confirmation",
+      value: "Submitted",
       state: "pending",
     };
   })();
 
   const backendNode: RailNode = {
     id: "claim",
-    label: "Backend claim",
+    label: "Claim record",
     value: claimId
       ? claimStatus
         ? `${claimStatus} · ${claimId.slice(0, 8)}`
@@ -1047,7 +1050,7 @@ export function ResearcherRegistration() {
     }
 
     if (registrationState === "mismatch") {
-      return "This wallet is registered with a different commitment.";
+      return "This wallet is registered with a different researcher fingerprint.";
     }
 
     if (registrationState === "checking") {
@@ -1075,7 +1078,7 @@ export function ResearcherRegistration() {
     }
 
     if (!validCommitment) {
-      return "Load the matching proof artifact to read the researcher commitment.";
+      return "Load the matching proof package to read the researcher fingerprint.";
     }
 
     return registrationState === "available"
@@ -1087,6 +1090,41 @@ export function ResearcherRegistration() {
   const showDesktopSigningNotice =
     !walletConnected &&
     (walletStatus === "unavailable" || walletStatus === "error");
+
+  const displayCommitment =
+    normalizedCommitment.length === 64
+      ? showTechnicalCommitment
+        ? normalizedCommitment
+        : `${normalizedCommitment.slice(0, 8)}...${normalizedCommitment.slice(-8)}`
+      : commitment;
+
+  const whatHappensNext = (() => {
+    if (!loadedArtifact) {
+      return "Load the approved sample proof package. ZeroSeal will read the researcher fingerprint automatically.";
+    }
+
+    if (!walletConnected) {
+      return "Connect desktop Freighter and confirm that it is using Stellar Testnet.";
+    }
+
+    if (!correctNetwork) {
+      return "Switch Freighter to Stellar Testnet before approving any registry action.";
+    }
+
+    if (submissionState === "awaiting-signature") {
+      return "Review the contract, action and network shown inside Freighter before approval.";
+    }
+
+    if (registrationState === "matched") {
+      return "Open the real transaction and receipt. Do not treat a registration lookup without a retained transaction hash as a newly submitted transaction.";
+    }
+
+    if (registrationState === "available") {
+      return "Create the claim record, then continue to wallet approval when you are ready.";
+    }
+
+    return "ZeroSeal is checking the live Testnet state for this wallet and fingerprint.";
+  })();
 
   const submitRegistration = async () => {
     if (!address) {
@@ -1103,7 +1141,7 @@ export function ResearcherRegistration() {
 
     if (!validCommitment) {
       setSubmissionState("error");
-      setMessage("Enter a valid 64 character hexadecimal commitment.");
+      setMessage("Load a valid 64 character researcher fingerprint.");
       return;
     }
 
@@ -1116,7 +1154,7 @@ export function ResearcherRegistration() {
     if (registrationState !== "available") {
       setMessage(
         registrationState === "mismatch"
-          ? "This wallet is registered with a different commitment."
+          ? "This wallet is registered with a different researcher fingerprint."
           : "Wait for the Testnet registration check to complete.",
       );
       return;
@@ -1238,9 +1276,17 @@ export function ResearcherRegistration() {
     >
       <div className="shell">
         <header className="zs-reg-intro">
-          <p className="zs-reg-intro__eyebrow zs-intro-kicker">Live proof workspace</p>
-          <h2 className="zs-reg-intro__title zs-intro-title" id="zs-reg-heading">From private witness to public receipt</h2>
-          <p className="zs-reg-intro__lede zs-intro-note">Connect a Testnet wallet, load the approved proof artifact and authorise the Claim Registry transaction through Freighter.</p>
+          <p className="zs-reg-intro__eyebrow zs-intro-kicker">LIVE TESTNET WORKSPACE</p>
+          <h2 className="zs-reg-intro__title zs-intro-title" id="zs-reg-heading">Try the real claim flow.</h2>
+          <p className="zs-reg-intro__lede zs-intro-note">
+            Load the approved sample proof, review the automatically generated
+            fingerprint, create the claim and authorise the registry action
+            through Freighter.
+          </p>
+          <p className="workspace-warning">
+            This workspace can create a real Stellar Testnet transaction. Review
+            every wallet request before approval.
+          </p>
         </header>
 
         <section className="programme-selector" aria-label="Selected programme">
@@ -1248,45 +1294,67 @@ export function ResearcherRegistration() {
             <p className="eyebrow">Programme</p>
             <h3>{programmeName}</h3>
             <p>
-              Demo programme. The selected policy proves a published impact
-              threshold without exposing exploit details or complete witness
-              values.
+              This sample programme demonstrates how a security programme can
+              publish an impact rule without requesting the complete private
+              witness.
             </p>
           </div>
-          <dl>
-            <div>
-              <dt>Programme ID</dt>
-              <dd>{programmeIdentifier}</dd>
-            </div>
-            <div>
-              <dt>Snapshot</dt>
-              <dd>{snapshotIdentifier}</dd>
-            </div>
-            <div>
-              <dt>Policy</dt>
-              <dd>{policyIdentifier}</dd>
-            </div>
-            <div>
-              <dt>Circuit</dt>
-              <dd>{circuitIdentifier}</dd>
-            </div>
-            <div>
-              <dt>Snapshot expiry</dt>
-              <dd>{snapshotExpiry}</dd>
-            </div>
-            <div>
-              <dt>Public impact rule</dt>
-              <dd>{policyRule}</dd>
-            </div>
-            <div>
-              <dt>Evidence binding</dt>
-              <dd>claim-attached, circuit binding pending</dd>
-            </div>
-            <div>
-              <dt>Network</dt>
-              <dd>Stellar Testnet</dd>
-            </div>
-          </dl>
+          <div className="programme-selector__summary">
+            <dl>
+              <div>
+                <dt>Programme</dt>
+                <dd>ZeroSeal Security Impact Demo</dd>
+              </div>
+              <div>
+                <dt>Public rule</dt>
+                <dd>
+                  The private demonstrated loss meets or exceeds the
+                  programme&apos;s published threshold.
+                </dd>
+              </div>
+              <div>
+                <dt>Network</dt>
+                <dd>Stellar Testnet</dd>
+              </div>
+              <div>
+                <dt>Proof package</dt>
+                <dd>security-impact-v1</dd>
+              </div>
+            </dl>
+            <details className="programme-selector__details">
+              <summary>View programme details</summary>
+              <dl>
+                <div>
+                  <dt>Programme ID</dt>
+                  <dd>{programmeIdentifier}</dd>
+                </div>
+                <div>
+                  <dt>Snapshot ID</dt>
+                  <dd>{snapshotIdentifier}</dd>
+                </div>
+                <div>
+                  <dt>Policy ID</dt>
+                  <dd>{policyIdentifier}</dd>
+                </div>
+                <div>
+                  <dt>Circuit ID</dt>
+                  <dd>{circuitIdentifier}</dd>
+                </div>
+                <div>
+                  <dt>Snapshot expiry</dt>
+                  <dd>{snapshotExpiry}</dd>
+                </div>
+                <div>
+                  <dt>Full public rule</dt>
+                  <dd>{policyRule}</dd>
+                </div>
+                <div>
+                  <dt>Evidence binding status</dt>
+                  <dd>claim-attached, circuit binding pending</dd>
+                </div>
+              </dl>
+            </details>
+          </div>
           {programmeMessage ? (
             <div className="programme-selector__warning">
               <p>{programmeMessage}</p>
@@ -1302,6 +1370,29 @@ export function ResearcherRegistration() {
             </div>
           ) : null}
         </section>
+
+        <div className="workspace-tabs" role="tablist" aria-label="Workspace display mode">
+          {[
+            ["guided", "Guided view"],
+            ["live", "Live Testnet"],
+            ["technical", "Technical details"],
+          ].map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={workspaceMode === mode}
+              onClick={() => setWorkspaceMode(mode as WorkspaceMode)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <aside className="next-panel" aria-live="polite">
+          <span>What happens next</span>
+          <p>{whatHappensNext}</p>
+        </aside>
 
         <div className="zs-ws">
           <div className="zs-ws__bar">
@@ -1323,24 +1414,42 @@ export function ResearcherRegistration() {
           </div>
 
           <div className="zs-ws__body">
-            <ol
-              className="zs-spine"
-              aria-label="Registration verification status"
-            >
-              {rail.map((node) => (
-                <li className="zs-node" data-state={node.state} key={node.id}>
-                  <span className="zs-node__seal">
-                    <SealMark state={node.state} />
-                  </span>
-                  <span className="zs-node__main">
-                    <span className="zs-node__label">{node.label}</span>
-                    <span className="zs-node__value" title={node.full}>
-                      {node.value}
+            {workspaceMode !== "guided" ? (
+              <ol
+                className="zs-spine"
+                aria-label="Registration verification status"
+              >
+                {rail.map((node) => (
+                  <li className="zs-node" data-state={node.state} key={node.id}>
+                    <span className="zs-node__seal">
+                      <SealMark state={node.state} />
                     </span>
-                  </span>
-                </li>
-              ))}
-            </ol>
+                    <span className="zs-node__main">
+                      <span className="zs-node__label">{node.label}</span>
+                      <span className="zs-node__value" title={node.full}>
+                        {node.value}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="workspace-guide">
+                <h3>Guided view</h3>
+                <p>
+                  Work through the real flow from top to bottom. ZeroSeal will
+                  load the sample proof package, read the researcher fingerprint
+                  and only request a wallet approval when you choose to continue.
+                </p>
+                <ol>
+                  <li>Load sample proof package</li>
+                  <li>Review the researcher fingerprint</li>
+                  <li>Connect Freighter on Stellar Testnet</li>
+                  <li>Continue to wallet approval</li>
+                  <li>Inspect the public receipt after confirmation</li>
+                </ol>
+              </div>
+            )}
 
             <div className="zs-action">
               <VerifiedArtifactLoader
@@ -1358,11 +1467,12 @@ export function ResearcherRegistration() {
               />
 
               <details className="zs-advanced-evidence">
-                <summary>Advanced: local evidence manifest</summary>
+                <summary>Optional local evidence seal</summary>
                 <p>
-                  Files stay local. The current circuit does not include this
-                  manifest commitment as a proof public input. This commitment
-                  is not an on-chain proof until a compatible circuit binds it.
+                  Your files remain on this device. ZeroSeal creates a local
+                  fingerprint of the selected bundle. In this version, that
+                  fingerprint is attached to the claim but is not yet
+                  cryptographically bound by the security-impact circuit.
                 </p>
                 <EvidenceManifest
                   compact
@@ -1406,12 +1516,18 @@ export function ResearcherRegistration() {
                     className="zs-field__label"
                     htmlFor="researcher-commitment"
                   >
-                    researcher commitment from proof artifact
+                    Researcher fingerprint
                   </label>
                   <span className="zs-field__count" data-valid={validCommitment}>
-                    {normalizedCommitment.length}/64
+                    {validCommitment ? "loaded" : `${normalizedCommitment.length}/64`}
                   </span>
                 </div>
+                <p className="zs-field__hint">
+                  ZeroSeal reads this value automatically when the approved
+                  proof package is loaded. It is a fixed cryptographic
+                  fingerprint linked to the package and does not reveal the
+                  private witness.
+                </p>
 
                 <div className="zs-input" data-state={inputState}>
                   <input
@@ -1422,8 +1538,8 @@ export function ResearcherRegistration() {
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck={false}
-                    placeholder="Load the approved proof artifact"
-                    value={commitment}
+                    placeholder="Load the approved proof package"
+                    value={displayCommitment}
                     readOnly
                     disabled={busy}
                   />
@@ -1445,9 +1561,31 @@ export function ResearcherRegistration() {
                 </div>
 
                 <p className="zs-field__hint">
-                  This stable registration commitment is loaded from the proof
-                  artifact. Evidence file changes do not modify it.
+                  You do not calculate or paste this value. Load the approved
+                  proof package and ZeroSeal fills it in automatically.
                 </p>
+                <details className="technical-details technical-details--compact">
+                  <summary>Technical name: researcher commitment</summary>
+                  <p>
+                    This hexadecimal value is used by the registry. It is shown
+                    for technical inspection and is not the private exploit.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--outline"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setShowTechnicalCommitment((value) => !value);
+                    }}
+                  >
+                    {showTechnicalCommitment
+                      ? "Hide technical value"
+                      : "Show technical value"}
+                  </button>
+                  {showTechnicalCommitment && validCommitment ? (
+                    <code>{normalizedCommitment}</code>
+                  ) : null}
+                </details>
               </div>
 
               <button
@@ -1476,45 +1614,49 @@ export function ResearcherRegistration() {
 
         <div className="zs-state-summary" aria-label="ZeroSeal workflow states">
           <div>
-            <span>Registration status</span>
+            <span>Wallet approval</span>
             <strong>
               {registrationState === "matched"
-                ? "Researcher registration confirmed"
+                ? "Confirmed"
                 : registrationState === "available"
-                  ? "Researcher not registered"
+                  ? "Ready for wallet"
                   : registrationState === "mismatch"
-                    ? "Different researcher commitment registered"
-                    : "Pending"}
+                    ? "Action failed"
+                    : "Not connected"}
             </strong>
           </div>
           <div>
-            <span>Proof validation status</span>
+            <span>Proof package</span>
             <strong>
               {claimStatus === "PROOF_RECEIVED" ||
               claimStatus === "VERIFYING" ||
               claimStatus === "AWAITING_WALLET_SIGNATURE"
-                ? "Proof structurally validated"
+                ? "Artifact structurally checked"
                 : loadedArtifact
-                  ? "Artifact loaded"
-                  : "Pending proof artifact"}
+                  ? "Package loaded"
+                  : "Package not loaded"}
             </strong>
           </div>
           <div>
-            <span>Claim submission status</span>
+            <span>Claim record</span>
             <strong>
               {claimStatus === "SUBMITTED" ||
               claimStatus === "CONFIRMED" ||
               claimStatus === "RECEIPT_ISSUED"
-                ? "Claim transaction submitted"
-                : "No confirmed claim transaction"}
+                ? "Submitted"
+                : claimId
+                  ? "Claim processing"
+                  : "Claim not created"}
             </strong>
           </div>
           <div>
-            <span>Receipt status</span>
+            <span>Stellar confirmation</span>
             <strong>
               {claimStatus === "RECEIPT_ISSUED"
-                ? "Claim receipt issued"
-                : "No claim receipt issued"}
+                ? "Receipt issued"
+                : registrationState === "matched"
+                  ? "Confirmed"
+                  : "Submitted"}
             </strong>
           </div>
         </div>

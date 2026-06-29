@@ -288,11 +288,11 @@ export function VerifiedArtifactLoader({
 
   const status =
     state === "checking"
-      ? "Checking proof artifact"
+      ? "Checking proof package"
       : state === "ready"
-        ? "Artifact structurally valid"
+        ? "Artifact structurally checked"
         : state === "loaded"
-          ? "Proof artifact loaded"
+          ? "Sample proof package loaded"
           : "Artifact unavailable";
 
   return (
@@ -322,14 +322,14 @@ export function VerifiedArtifactLoader({
 
       <div className="zs-artifact-loader__content">
         <span className="zs-artifact-loader__label">
-          PROOF ARTIFACT
+          PROOF PACKAGE
         </span>
 
         <strong>{status}</strong>
 
         {artifact ? (
           <small>
-            researcher commitment {shorten(artifact.commitment)}
+            researcher fingerprint {shorten(artifact.commitment)}
             {" · "}
             base64 {artifact.commitmentBase64}
             {" · "}
@@ -364,7 +364,7 @@ export function VerifiedArtifactLoader({
       >
         {state === "loaded"
           ? "Loaded"
-          : "Load proof artifact"}
+          : "Load sample proof package"}
       </button>
     </div>
   );

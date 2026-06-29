@@ -5,34 +5,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const SLIDES = [
   {
     title: "Verification credits",
-    buyer: "Security programmes and sponsoring organisations",
-    value: "Per-proof or prepaid access to ZeroSeal verification infrastructure.",
-    stellar: "Optional Testnet payment experiments remain separate from claim truth.",
-    availability: "Roadmap commercially; demo payment code is not production billing.",
+    text: "Programmes can purchase individual checks or prepaid verification capacity.",
   },
   {
     title: "Programme infrastructure",
-    buyer: "Bug-bounty programmes, protocols and audit organisations",
-    value:
-      "Policy configuration, claim dashboards, verification records and receipt management.",
-    stellar: "Claim Registry calls and public receipt state.",
-    availability: "Partial: demo programme, policies and claim persistence are implemented.",
+    text: "Policy configuration, claim dashboards, lifecycle tracking and receipt management.",
   },
   {
     title: "Custom proof systems",
-    buyer: "Programmes with specific impact rules",
-    value:
-      "Purpose-built circuits and integrations for programme-specific impact rules.",
-    stellar: "Dedicated verifier contracts and versioned public-input policy.",
-    availability: "Roadmap unless a dedicated circuit is implemented and verified.",
+    text: "Programme-specific circuits and integrations for defined impact, scope and evidence rules.",
   },
   {
-    title: "Enterprise disclosure infrastructure",
-    buyer: "Security teams and disclosure operators",
-    value:
-      "Private claim workflows, audit trails and controlled disclosure integration.",
-    stellar: "Receipts can anchor confirmed disclosure events on Stellar Testnet.",
-    availability: "Roadmap; not presented as a live enterprise product.",
+    title: "Settlement integrations",
+    text: "Future escrow and payout integrations can respond to confirmed proof and receipt states.",
   },
 ] as const;
 
@@ -114,24 +99,7 @@ export function BusinessModelCarousel() {
       <div className="business-carousel__index">{label}</div>
       <article className="business-carousel__slide" key={active.title}>
         <h3>{active.title}</h3>
-        <dl>
-          <div>
-            <dt>Buyer</dt>
-            <dd>{active.buyer}</dd>
-          </div>
-          <div>
-            <dt>Value</dt>
-            <dd>{active.value}</dd>
-          </div>
-          <div>
-            <dt>Stellar activity</dt>
-            <dd>{active.stellar}</dd>
-          </div>
-          <div>
-            <dt>Availability</dt>
-            <dd>{active.availability}</dd>
-          </div>
-        </dl>
+        <p>{active.text}</p>
       </article>
       <div className="business-carousel__controls">
         <button type="button" onClick={() => go(-1)} aria-label="Previous business model slide">

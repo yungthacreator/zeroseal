@@ -4,9 +4,9 @@ import { WalletProvider } from "@/context/wallet-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ZeroSeal | Real-world zero-knowledge claims on Stellar",
+  title: "ZeroSeal | Private bug evidence, verifiable public claims",
   description:
-    "ZeroSeal converts private evidence into a zero-knowledge proof, verifies it through Soroban, and records only a replay-resistant public receipt on Stellar.",
+    "ZeroSeal helps security researchers present permitted public impact claims while sensitive evidence stays local and confirmed actions receive Stellar Testnet receipts.",
   applicationName: "ZeroSeal",
 };
 

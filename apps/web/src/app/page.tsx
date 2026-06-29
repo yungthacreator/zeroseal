@@ -1,5 +1,6 @@
 import { BusinessModelCarousel } from "@/components/business-model-carousel";
 import { CredibilityMarquee } from "@/components/credibility-marquee";
+import { GuidedProofDemo } from "@/components/guided-proof-demo";
 import { HeroActions } from "@/components/hero-actions";
 import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
 import { OnChainActivity } from "@/components/on-chain-activity";
@@ -22,44 +23,79 @@ const verifierContractId =
   process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ?? DEFAULT_VERIFIER_CONTRACT_ID;
 
 const TECH_PIPELINE = [
-  "Noir circuit",
-  "UltraHonk proof",
-  "Soroban verifier status",
-  "Claim Registry",
-  "Replay-protected receipt",
+  "Private evidence",
+  "Approved proof package",
+  "Public claim",
+  "Wallet approval",
+  "Testnet receipt",
 ] as const;
 
-const PRIVATE_ITEMS = [
-  "exploit details",
-  "reproduction steps",
-  "sensitive code paths",
-  "researcher secret",
-  "private values",
-  "complete witness",
+const TRUST_POINTS = [
+  "Evidence stays on your device",
+  "Only approved public claim data is exposed",
+  "Confirmed actions receive a Stellar Testnet receipt",
 ] as const;
 
-const VERIFIABLE_ITEMS = [
-  "programme identifier",
-  "snapshot identifier",
-  "impact rule",
-  "public threshold",
-  "researcher commitment",
-  "nullifier",
-  "accepted receipt",
-  "transaction hash",
+const PAIN_POINTS = [
+  {
+    title: "Reveal too early",
+    text: "A full exploit may be exposed before the researcher receives acknowledgement, protection or clear payout terms.",
+  },
+  {
+    title: "Duplicate disputes",
+    text: "A researcher may receive a duplicate decision without enough information to independently understand how the new report overlaps with an earlier private submission.",
+  },
+  {
+    title: "Severity disputes",
+    text: "The impact of a finding can become a negotiation before the underlying evidence has been handled safely.",
+  },
+  {
+    title: "Programme risk",
+    text: "Security teams must separate real, reproducible findings from incomplete or exaggerated reports without creating more exposure.",
+  },
+] as const;
+
+const SOLUTION_CARDS = [
+  {
+    title: "Keep the evidence private",
+    text: "Exploit code, exact values, reproduction steps and sensitive witness material remain on the researcher's device.",
+  },
+  {
+    title: "Present only the approved claim",
+    text: "The proof package exposes the programme, policy, threshold and other permitted public inputs without publishing the complete witness.",
+  },
+  {
+    title: "Create a durable public record",
+    text: "After wallet approval and Testnet confirmation, ZeroSeal displays an inspectable transaction and replay-resistant receipt.",
+  },
+] as const;
+
+const TRADITIONAL_DISCLOSURE = [
+  "Share the report first",
+  "Rely heavily on private trust",
+  "Negotiate impact after exposure",
+  "Keep the record inside one platform",
+] as const;
+
+const ZEROSEAL_DISCLOSURE = [
+  "Keep sensitive evidence local",
+  "Present only permitted public claim data",
+  "Create a policy-linked verification path",
+  "Record confirmed actions on Stellar Testnet",
 ] as const;
 
 const FOOTER_PRODUCT_LINKS = [
-  { label: "Use cases", href: "#use-cases" },
-  { label: "Proof workspace", href: "#proof-workspace" },
+  { label: "Why ZeroSeal", href: "#why-zeroseal" },
+  { label: "Guided demo", href: "#guided-demo" },
   { label: "How it works", href: "#how-it-works" },
+  { label: "Live workspace", href: "#proof-workspace" },
   { label: "Network activity", href: "#network-activity" },
 ] as const;
 
 const FOOTER_DEVELOPER_LINKS = [
   { label: "Registry contract", href: explorerContractUrl(registryContractId) },
   { label: "Verifier contract", href: explorerContractUrl(verifierContractId) },
-  { label: "Official Freighter", href: "https://freighter.app/" },
+  { label: "GitHub", href: "https://github.com/yungthacreator/zeroseal" },
 ] as const;
 
 export default function Home() {
@@ -71,21 +107,26 @@ export default function Home() {
         <section className="hero" id="hero">
           <div className="shell hero__inner">
             <p className="eyebrow">
-              Real-world zero-knowledge claims on Stellar
+              PRIVATE BUG EVIDENCE. VERIFIABLE PUBLIC CLAIMS.
             </p>
             <h1 className="display display--hero hero__headline">
-              Prove what matters.
+              Prove the security impact.
               <br />
-              <em>Reveal nothing else.</em>
+              <em>Keep the exploit private.</em>
             </h1>
             <p className="lede hero__lede">
-              ZeroSeal lets security researchers prove that private
-              vulnerability evidence satisfies a public impact rule. The
-              witness remains on the researcher&apos;s device while ZeroSeal
-              separates structural validation, cryptographic verification
-              status and confirmed Stellar Testnet records.
+              ZeroSeal helps security researchers present a permitted impact
+              claim without revealing the full exploit first. Sensitive evidence
+              stays on the researcher&apos;s device while the public claim,
+              wallet approval and confirmed Stellar receipt remain
+              independently inspectable.
             </p>
             <HeroActions />
+            <ul className="hero__trust" aria-label="ZeroSeal trust points">
+              {TRUST_POINTS.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
             <div className="tech-pipeline" aria-label="Technical pipeline">
               <ol>
                 {TECH_PIPELINE.map((item) => (
@@ -93,59 +134,114 @@ export default function Home() {
                 ))}
               </ol>
               <p>
-                <span aria-hidden="true" />
-                Running on Stellar Testnet
+                <span className="live-dot" aria-hidden="true" />
+                Live demo on Stellar Testnet
               </p>
             </div>
           </div>
         </section>
 
-        <CredibilityMarquee />
+        <section className="section section--cream story-section" id="why-zeroseal">
+          <div className="shell">
+            <header className="section__head">
+              <p className="eyebrow">THE DISCLOSURE TRUST GAP</p>
+              <h2 className="display display--lg">
+                Researchers should not have to reveal everything just to be
+                believed.
+              </h2>
+              <p className="lede">
+                Security disclosure often begins with an uncomfortable
+                trade-off. A researcher may need to expose sensitive exploit
+                details before scope, severity, priority or payment has been
+                agreed. At the same time, a programme needs enough evidence to
+                distinguish a serious finding from an incomplete or exaggerated
+                claim.
+              </p>
+            </header>
+            <div className="story-grid story-grid--four">
+              {PAIN_POINTS.map((card) => (
+                <article className="story-card" key={card.title}>
+                  <h3>{card.title}</h3>
+                  <p>{card.text}</p>
+                </article>
+              ))}
+            </div>
+            <p className="story-closing">
+              Both sides are asked to trust before either side has enough
+              protection.
+            </p>
+          </div>
+        </section>
+
+        <section className="section section--paper story-section" id="zeroseal-layer">
+          <div className="shell">
+            <header className="section__head">
+              <p className="eyebrow">THE ZEROSEAL LAYER</p>
+              <h2 className="display display--lg">
+                A safer middle step between discovery and disclosure.
+              </h2>
+              <p className="lede">
+                ZeroSeal separates the private evidence from the public claim.
+                The researcher keeps the exploit material locally, the
+                programme defines what may be proven publicly, and Stellar
+                records the confirmed registry action.
+              </p>
+            </header>
+            <div className="story-grid story-grid--three">
+              {SOLUTION_CARDS.map((card) => (
+                <article className="story-card story-card--solution" key={card.title}>
+                  <h3>{card.title}</h3>
+                  <p>{card.text}</p>
+                </article>
+              ))}
+            </div>
+            <p className="positioning-statement">
+              ZeroSeal is not a bug bounty marketplace and it does not replace
+              human triage. It is a verification layer that can sit between
+              private evidence, programme review and settlement.
+            </p>
+            <div className="comparison-table" aria-label="Disclosure comparison">
+              <section>
+                <h3>Traditional disclosure</h3>
+                <ul>
+                  {TRADITIONAL_DISCLOSURE.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+              <section>
+                <h3>ZeroSeal-assisted disclosure</h3>
+                <ul>
+                  {ZEROSEAL_DISCLOSURE.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <GuidedProofDemo />
 
         <section className="section section--dotted" id="how-it-works">
           <div className="shell">
             <header className="section__head section__head--split">
               <div>
-                <p className="eyebrow">How it works</p>
+                <p className="eyebrow">HOW IT WORKS</p>
                 <h2 className="display display--lg">
-                  Private witness. Public verification.
+                  Private evidence in. Public assurance out.
                 </h2>
               </div>
               <p className="lede">
-                ZeroSeal separates local witness material from the public
-                inputs and receipts required to verify a security-impact claim.
+                ZeroSeal turns a sensitive security finding into a controlled
+                public claim without publishing the complete exploit.
               </p>
             </header>
-
-            <div className="how-disclosure">
-              <HowItWorksTerminal />
-              <div className="compare compare--compact">
-                <section className="compare__col compare__col--private">
-                  <h3>REMAINS PRIVATE</h3>
-                  <ul>
-                    {PRIVATE_ITEMS.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </section>
-                <section className="compare__col compare__col--verifiable">
-                  <h3>PUBLICLY VERIFIABLE</h3>
-                  <ul>
-                    {VERIFIABLE_ITEMS.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </section>
-              </div>
-            </div>
+            <HowItWorksTerminal />
           </div>
         </section>
 
-        <section className="section section--cream" id="use-cases">
-          <div className="shell">
-            <UseCaseEngine />
-          </div>
-        </section>
+        <CredibilityMarquee />
 
         <ResearcherRegistration />
 
@@ -169,17 +265,23 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="section section--cream" id="use-cases">
+          <div className="shell">
+            <UseCaseEngine />
+          </div>
+        </section>
+
         <section className="section section--paper" id="business">
           <div className="shell">
             <header className="section__head">
-              <p className="eyebrow">Business model</p>
+              <p className="eyebrow">PROGRAMME INFRASTRUCTURE</p>
               <h2 className="display display--lg">
-                Verification infrastructure for security programmes
+                Verification infrastructure for security programmes.
               </h2>
               <p className="lede">
-                ZeroSeal can turn privacy-preserving claim verification into
-                reusable infrastructure for security programmes, protocols and
-                institutions.
+                ZeroSeal can provide privacy-preserving claim checks, programme
+                policy configuration and auditable public receipts as reusable
+                infrastructure.
               </p>
             </header>
             <BusinessModelCarousel />
@@ -200,8 +302,8 @@ export default function Home() {
       <footer className="footer">
         <div className="shell footer__inner">
           <div className="footer__brand">
-            <strong>ZEROSEAL</strong>
-            <p>Privacy-preserving security claims on Stellar.</p>
+            <strong>ZeroSeal</strong>
+            <p>Privacy-preserving security claims on Stellar Testnet.</p>
           </div>
           <nav className="footer__col" aria-label="Product">
             <h2>Product</h2>
@@ -225,21 +327,21 @@ export default function Home() {
               ))}
             </ul>
           </nav>
-          <nav className="footer__col" aria-label="Security">
-            <h2>Security</h2>
+          <nav className="footer__col" aria-label="Prototype status">
+            <h2>Prototype status</h2>
             <ul>
               <li>
-                <a href="#how-it-works">Architecture</a>
+                <span>Research prototype running on Stellar Testnet.</span>
               </li>
               <li>
-                <span>Independent project notice</span>
+                <a href="#use-cases">Use cases</a>
               </li>
             </ul>
           </nav>
         </div>
         <div className="shell footer__bottom">
-          <span>Built independently for Stellar Testnet.</span>
-          <span>© 2026 ZeroSeal</span>
+          <span>Research prototype running on Stellar Testnet.</span>
+          <span>Copyright 2026 ZeroSeal</span>
           <span>Network TESTNET</span>
           <a href={explorerContractUrl(registryContractId)} target="_blank" rel="noreferrer">
             Registry{" "}
