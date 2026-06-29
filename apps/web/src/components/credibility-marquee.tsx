@@ -4,16 +4,16 @@ import Image from "next/image";
 
 const ECOSYSTEMS = [
   {
+    name: "HackerOne",
+    logo: "/brands/hackerone.svg",
+  },
+  {
     name: "Immunefi",
     logo: "/brands/immunefi.svg",
   },
   {
     name: "Code4rena",
     logo: "/brands/code4rena.svg",
-  },
-  {
-    name: "Cantina",
-    logo: "/brands/cantina.svg",
   },
   {
     name: "CodeHawks",
@@ -23,7 +23,7 @@ const ECOSYSTEMS = [
 
 function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
   return (
-    <span className="credibility-marquee__logo-wrap">
+    <li className="credibility-marquee__logo-wrap">
       <Image
         className="credibility-marquee__logo"
         src={item.logo}
@@ -33,19 +33,7 @@ function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
         loading="lazy"
         unoptimized
       />
-    </span>
-  );
-}
-
-function MarqueeTrack({ hidden = false }: { hidden?: boolean }) {
-  return (
-    <ul className="credibility-marquee__track" aria-hidden={hidden}>
-      {ECOSYSTEMS.map((item) => (
-        <li key={item.name}>
-          <EcosystemLogo item={item} />
-        </li>
-      ))}
-    </ul>
+    </li>
   );
 }
 
@@ -63,19 +51,17 @@ export function CredibilityMarquee() {
           Designed for the workflows researchers already use.
         </h3>
         <p className="credibility-marquee__lede">
-          ZeroSeal can complement existing research, audit and vulnerability
-          disclosure processes by adding a privacy-preserving verification and
-          receipt layer.
+          ZeroSeal can add a privacy-preserving verification and receipt layer
+          to existing security research and disclosure workflows.
         </p>
-        <div
+        <ul
           className="credibility-marquee__viewport"
           aria-label="Security disclosure ecosystem examples"
         >
-          <div className="credibility-marquee__motion">
-            <MarqueeTrack />
-            <MarqueeTrack hidden />
-          </div>
-        </div>
+          {ECOSYSTEMS.map((item) => (
+            <EcosystemLogo item={item} key={item.name} />
+          ))}
+        </ul>
       </div>
     </section>
   );

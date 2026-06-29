@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PublicPayload } from "@/lib/claim-flow";
 import { shortenAddress } from "@/lib/presentation";
 import {
   explorerTransactionUrl,
@@ -15,6 +16,7 @@ type LoadState =
   | { phase: "loading" }
   | { phase: "invalid" }
   | { phase: "missing" }
+  | { phase: "public-claim"; payload: PublicPayload }
   | { phase: "failed"; tx: HorizonTransaction }
   | { phase: "confirmed"; tx: HorizonTransaction };
 
@@ -49,7 +51,27 @@ export default function ReceiptPage() {
 
   useEffect(() => {
     if (!hashIsValid) {
-      return;
+      let cancelled = false;
+      const timer = window.setTimeout(() => {
+        try {
+          const raw = window.localStorage.getItem(`zeroseal:public-claim:${hash}`);
+          if (!cancelled && raw) {
+            setState({
+              phase: "public-claim",
+              payload: JSON.parse(raw) as PublicPayload,
+            });
+          }
+        } catch {
+          if (!cancelled) {
+            setState({ phase: "invalid" });
+          }
+        }
+      }, 0);
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
     }
 
     const controller = new AbortController();
@@ -136,6 +158,41 @@ export default function ReceiptPage() {
               <p>
                 This link does not contain a valid Stellar transaction hash.
               </p>
+            </div>
+          </div>
+        ) : null}
+
+        {state.phase === "public-claim" ? (
+          <div className="receipt-page__card">
+            <div className="receipt-page__head">
+              <p>ZeroSeal public claim</p>
+              <h1>No confirmed transaction yet</h1>
+            </div>
+            <p>
+              This browser has a public claim record for the identifier, but no
+              confirmed Stellar transaction hash is attached.
+            </p>
+            <dl className="receipt-page__rows">
+              <ReceiptRow label="Claim identifier" value={state.payload.claimIdentifier} />
+              <ReceiptRow label="Network" value={state.payload.network} />
+              <ReceiptRow label="Programme context" value={state.payload.programmeContext} />
+              <ReceiptRow label="Policy" value={state.payload.publicPolicyIdentifier} />
+              <ReceiptRow label="Public threshold" value={state.payload.publicThreshold} />
+              <ReceiptRow label="Researcher fingerprint" value={state.payload.researcherFingerprint} mono />
+              <ReceiptRow label="Nullifier" value={state.payload.nullifier} mono />
+              <ReceiptRow label="Verifier version" value={state.payload.verifierVersion} />
+              <ReceiptRow label="Verification state" value={state.payload.verificationResult} />
+            </dl>
+            <div className="receipt-page__actions">
+              <button
+                type="button"
+                className={`btn btn--outline btn--sm${
+                  copied === "url" ? " copied-flash" : ""
+                }`}
+                onClick={() => copy("url", publicUrl)}
+              >
+                {copied === "url" ? "Copied" : "Copy receipt URL"}
+              </button>
             </div>
           </div>
         ) : null}

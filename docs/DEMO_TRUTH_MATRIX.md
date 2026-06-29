@@ -11,9 +11,16 @@
 | Third-party programme integration | Not supported | API programme records | Ecosystem names are references only |
 | Desktop Freighter connection | Implemented locally | Wallet context and browser extension | Tested path is desktop extension signing |
 | Mobile Freighter signing | Not supported | Wallet UX | Mobile can explore; signing requires desktop extension |
+| Focused claim creation route | Implemented locally | `/create` route and claim wizard | Homepage links to the route instead of embedding the technical workspace |
+| Safe fictional demo route | Implemented locally | `/demo` route and claim wizard | Starts untouched; fictional data loads only after an explicit user click |
+| Public receipt verification route | Implemented locally | `/verify` and `/receipt/[identifier]` routes | Shows public fields only; local claim identifiers cannot impersonate confirmed Stellar receipts |
+| Researcher fingerprint before generation | Not supported | Claim wizard state | Fingerprint is absent until the user clicks Generate private seal |
+| Preloaded proof package before user action | Not supported | Claim wizard state | No package is loaded by default in create or demo |
 | Evidence files remain local | Implemented locally | Browser evidence manifest | File contents are read locally for hashing and are not sent to the API |
+| Wizard private evidence remains local | Implemented locally | Browser claim flow library | Private evidence is hashed locally for a seal and excluded from public payloads |
 | Evidence commitment attached to claim | Implemented locally | `POST /api/v1/claims/:claimId/evidence` | Stored as local or claim-attached metadata |
 | Evidence commitment constrained by `security-impact-v1` | Not supported | Proof public inputs | v1 has no `evidence_commitment` public input |
+| Generic exploit validity proof | Not supported | Noir circuit public inputs | Current circuit supports a private impact threshold predicate, not arbitrary exploit verification |
 | Researcher fingerprint | Structurally validated | Supported proof artifact public inputs | Technical name: researcher commitment. Must not be confused with the local evidence seal |
 | Proof artifact digest | Structurally validated | API proof validator | Digest is calculated from submitted artifact payload |
 | Public-input digest | Structurally validated | API proof validator | Digest covers ordered accepted public inputs |
@@ -25,6 +32,7 @@
 | Real transaction hash | Recorded on Stellar Testnet | Horizon reconciliation | Only display as confirmed after successful Stellar response |
 | Ledger number | Recorded on Stellar Testnet | Horizon reconciliation | Required before receipt issuance |
 | Public receipt | Implemented locally; live only after production API | API receipt table | Issued only after confirmed transaction, real hash and ledger |
+| Local public claim preview | Implemented locally | Browser local storage and `/receipt/[identifier]` | Displays "No confirmed transaction yet" until a real hash is attached |
 | Exact duplicate fingerprint equality | Roadmap | Future circuit | Not implemented in v1 |
 | Semantic duplicate detection | Roadmap | Future product research | Not claimed |
 | Automated bounty escrow | Roadmap | Future settlement design | Not implemented |

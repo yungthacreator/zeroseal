@@ -2,53 +2,77 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const TOUR_STEPS = [
+const SCENES = [
   {
-    title: "A researcher discovers a serious vulnerability",
-    text: "The researcher has exploit code, reproduction steps and private values that should not be exposed before the report is handled safely.",
-    visual: "Private finding discovered",
+    title: "A vulnerability is discovered",
+    caption: "Exploit code, reproduction steps and sensitive values remain private.",
+    visual: "discovery",
   },
   {
-    title: "The sensitive evidence stays local",
-    text: "The exploit, exact values and complete witness remain on the researcher's device. ZeroSeal does not need to upload the private files to explain the public claim.",
-    visual: "Nothing private uploaded",
+    title: "The evidence stays on the device",
+    caption: "ZeroSeal does not upload the complete exploit to present the claim.",
+    visual: "privacy",
   },
   {
-    title: "An approved proof package is loaded",
-    text: "The proof package contains the supported claim structure and the public inputs permitted by the selected programme policy.",
-    visual: "Approved artifact loaded",
+    title: "The approved proof package is loaded",
+    caption: "The package supplies only the supported public claim structure.",
+    visual: "package",
   },
   {
-    title: "ZeroSeal reads the researcher fingerprint",
-    text: "The fingerprint is a fixed cryptographic value linked to the approved proof package. It helps identify changes without revealing the private witness. The researcher does not calculate or paste it manually.",
-    visual: "Fingerprint created automatically",
-  },
-  {
-    title: "The public claim is checked",
-    text: "The current demo checks the proof artifact structure and the permitted claim inputs. Cryptographic verification must only be shown as complete when the configured verifier confirms it.",
-    visual: "Claim checks completed",
+    title: "The fingerprint appears automatically",
+    caption: "ZeroSeal reads it from the proof package. The researcher does not calculate or paste it.",
+    visual: "fingerprint",
   },
   {
     title: "The researcher reviews the Testnet action",
-    text: "Freighter displays the exact Claim Registry transaction. Nothing is sent until the researcher reviews and approves it.",
-    visual: "Wallet approval required",
+    caption: "Freighter shows the exact Claim Registry transaction before approval.",
+    visual: "wallet",
   },
   {
-    title: "A confirmed action receives a receipt",
-    text: "After a real Stellar Testnet confirmation, ZeroSeal can display the transaction hash, ledger, account, contracts and public receipt. A real value appears only after actual confirmation.",
-    visual: "Public receipt available after confirmation",
+    title: "The confirmed action receives a receipt",
+    caption: "The real transaction, ledger and receipt appear only after confirmation.",
+    visual: "receipt",
   },
 ] as const;
+
+function SceneArtwork({ visual }: { visual: (typeof SCENES)[number]["visual"] }) {
+  return (
+    <div className="demo-art" data-scene={visual}>
+      <div className="demo-art__local">
+        <span>Report</span>
+        <span>Code file</span>
+        <span>Lock</span>
+      </div>
+      <div className="demo-art__boundary">
+        <span>Private device</span>
+      </div>
+      <div className="demo-art__zeroseal">ZeroSeal</div>
+      <div className="demo-art__wallet">
+        <strong>Freighter</strong>
+        <span>Stellar Testnet</span>
+        <span>Approval required</span>
+      </div>
+      <div className="demo-art__fingerprint">
+        <span>Researcher fingerprint</span>
+        <strong>04365013...448751d0</strong>
+      </div>
+      <div className="demo-art__receipt">
+        <span>Transaction appears after confirmation</span>
+        <span>Ledger appears after confirmation</span>
+        <span>Receipt appears after confirmation</span>
+      </div>
+      <i className="demo-art__line demo-art__line--a" />
+      <i className="demo-art__line demo-art__line--b" />
+    </div>
+  );
+}
 
 export function GuidedProofDemo() {
   const [index, setIndex] = useState(0);
   const [running, setRunning] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const step = TOUR_STEPS[index];
-  const progress = useMemo(
-    () => `Step ${index + 1} of ${TOUR_STEPS.length}`,
-    [index],
-  );
+  const scene = SCENES[index];
+  const progress = useMemo(() => ((index + 1) / SCENES.length) * 100, [index]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -64,15 +88,21 @@ export function GuidedProofDemo() {
     }
 
     const timer = window.setTimeout(() => {
-      setIndex((current) => (current + 1) % TOUR_STEPS.length);
-    }, 4500);
+      setIndex((current) => {
+        const next = Math.min(current + 1, SCENES.length - 1);
+        if (next === SCENES.length - 1) {
+          setRunning(false);
+        }
+        return next;
+      });
+    }, 8500);
 
     return () => window.clearTimeout(timer);
   }, [index, reducedMotion, running]);
 
   const pauseAndSet = (nextIndex: number) => {
     setRunning(false);
-    setIndex((nextIndex + TOUR_STEPS.length) % TOUR_STEPS.length);
+    setIndex((nextIndex + SCENES.length) % SCENES.length);
   };
 
   return (
@@ -80,15 +110,12 @@ export function GuidedProofDemo() {
       <div className="shell">
         <header className="section__head section__head--split">
           <div>
-            <p className="eyebrow">GUIDED PRODUCT TOUR</p>
-            <h2 className="display display--lg">
-              See the full journey before using the live workspace.
-            </h2>
+            <p className="eyebrow">VISUAL WALKTHROUGH</p>
+            <h2 className="display display--lg">Watch the claim become public.</h2>
           </div>
           <p className="lede">
-            Follow an illustrative security claim from private evidence to a
-            public Testnet receipt. This tour explains the product without
-            submitting a transaction or opening a wallet.
+            A short interactive walkthrough shows what stays private, what is
+            approved for public review, and when a receipt appears.
           </p>
         </header>
 
@@ -97,35 +124,30 @@ export function GuidedProofDemo() {
           aria-roledescription="carousel"
           aria-label="Illustrative guided tour"
         >
-          <div className="guided-demo__visual" aria-hidden="true">
-            <span>{step.visual}</span>
-            <div className="guided-demo__signal">
-              {TOUR_STEPS.map((item, stepIndex) => (
-                <i
-                  key={item.title}
-                  data-active={stepIndex === index}
-                  data-complete={stepIndex < index}
-                />
-              ))}
-            </div>
+          <div className="guided-demo__screen" data-running={running}>
+            <SceneArtwork visual={scene.visual} />
           </div>
 
-          <article className="guided-demo__content">
+          <article className="guided-demo__content" key={scene.title}>
             <span className="guided-demo__type">Illustrative guided tour</span>
             <p className="guided-demo__progress" aria-live="polite">
-              {progress}
+              Scene {index + 1} of {SCENES.length}
             </p>
-            <h3>{step.title}</h3>
-            <p>{step.text}</p>
-            {index === TOUR_STEPS.length - 1 ? (
+            <h3>{scene.title}</h3>
+            <p>{scene.caption}</p>
+            {index === SCENES.length - 1 ? (
               <div className="guided-demo__ready">
                 <strong>Ready to try the real flow?</strong>
-                <a className="btn btn--primary" href="#proof-workspace">
-                  Open the live Testnet workspace
+                <a className="btn btn--yellow" href="#proof-workspace">
+                  Open live Testnet workspace
                 </a>
               </div>
             ) : null}
           </article>
+
+          <div className="guided-demo__timeline" aria-hidden="true">
+            <span style={{ width: `${progress}%` }} />
+          </div>
         </div>
 
         <div className="guided-demo__controls" aria-label="Guided tour controls">
@@ -150,6 +172,9 @@ export function GuidedProofDemo() {
           >
             Restart
           </button>
+          <a className="btn btn--outline" href="#proof-workspace">
+            Open live workspace
+          </a>
         </div>
       </div>
     </section>

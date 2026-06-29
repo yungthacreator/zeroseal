@@ -215,11 +215,16 @@ export function OnChainActivity() {
             ))}
           </div>
         ) : (
-          <p className="activity-empty">
-            {state === "unavailable"
-              ? "Backend unavailable. No local transaction metadata was found."
-              : "No transaction has been recorded for this wallet."}
-          </p>
+          <div className="activity-empty">
+            <p>
+              {state === "unavailable"
+                ? "Backend unavailable. No local transaction metadata was found."
+                : "No transaction has been submitted from this browser."}
+            </p>
+            <a className="btn btn--outline btn--sm" href="#proof-workspace">
+              Open live workspace
+            </a>
+          </div>
         )}
       </div>
     </section>

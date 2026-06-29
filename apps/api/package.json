@@ -10,7 +10,7 @@
     "worker": "tsx src/worker.ts",
     "backfill:registration": "tsx src/backfill-registration.ts",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "tsx --test \"src/**/*.spec.ts\"",
+    "test": "tsx --tsconfig tsconfig.json --test \"src/**/*.spec.ts\"",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",

@@ -30,7 +30,7 @@ ZeroSeal introduces a cryptographic verification layer between the researcher an
 
 The researcher proves that an approved condition is satisfied. The programme receives a verifiable result and an auditable Stellar receipt. The private witness remains with the researcher.
 
-## What ZeroSeal proves
+## What ZeroSeal Proves
 
 The current implemented workflow focuses on security impact claims.
 
@@ -44,7 +44,9 @@ A programme defines public verification parameters such as:
 * verifier contract;
 * registry contract.
 
-The researcher supplies private witness values to an approved proof flow. Local evidence files can also be hashed into an evidence commitment, but the current v1 circuit does not yet prove that those arbitrary files produced the submitted proof.
+The researcher supplies private witness values to an approved proof flow. Local evidence files can also be hashed into an evidence commitment, but the current v1 circuit does not yet prove that arbitrary evidence files produced the submitted proof.
+
+The current Noir predicate is intentionally narrow: it demonstrates that a private impact scenario meets or exceeds a public threshold for the supported double-withdrawal or stale-entitlement class. It does not prove generic exploit validity.
 
 The resulting public claim can demonstrate that:
 
@@ -58,67 +60,51 @@ The resulting public claim can demonstrate that:
 
 The private witness is not sent to Stellar and is not stored by the ZeroSeal backend.
 
-## Live workflow
+## Product Workflow
 
-A new researcher can follow the application in this order.
+The homepage keeps the first interaction focused on three paths:
 
-### 1. Connect
+- `/create`: create a private claim from scratch.
+- `/demo`: try a safe fictional walkthrough. The fictional package only loads after the user asks for it.
+- `/verify`: inspect a public receipt, transaction hash, or claim identifier.
 
-Connect a Freighter wallet on Stellar Testnet.
+A new researcher can follow the claim creation flow in this order.
 
-Freighter exposes the selected public address and network. ZeroSeal never requests or stores the wallet seed phrase or secret key.
+### 1. Reporting Context
 
-### 2. Choose the claim
+Choose whether the claim is a bounty submission, coordinated disclosure, internal review, or audit follow-up.
 
-Select the:
+### 2. Programme and Target
 
-* programme;
-* programme snapshot;
-* impact policy;
-* supported proof circuit.
+Enter the programme, target, target snapshot, and affected component. These values define the public context that the private seal binds to.
 
-These values define the public statement that the proof must satisfy.
+### 3. Finding and Severity
 
-### 3. Prepare privately
+Describe the public impact category, severity, and threshold. The browser copy keeps the statement constrained to the supported predicate.
 
-Prepare the vulnerability report, proof of concept, screenshots, logs, reproduction notes, and supporting files locally.
+### 4. Private Evidence
 
-The current evidence workspace can calculate a deterministic local commitment without uploading the file contents.
+Prepare vulnerability details, proof-of-concept notes, screenshots, logs, reproduction notes, and witness details locally. These fields remain on the researcher's device.
 
-### 4. Generate the proof
+### 5. Generate Private Seal
 
-Use or load the approved `security-impact-v1` proof artifact.
+The browser creates a researcher fingerprint, canonical claim hash, private evidence digest, nullifier, and recovery bundle only after the user clicks **Generate private seal**.
 
-The private witness remains on the researcher's device.
+No fingerprint, proof package, or demo data is preloaded before user action.
 
-### 5. Create the backend claim
+### 6. Review Public Claim
 
-ZeroSeal creates a claim record containing only permitted public information, commitments, identifiers, and lifecycle state.
+Review the exact public payload. Raw evidence, reproduction steps, witness values, salt, keys, and unpublished report text are excluded.
 
-Raw vulnerability evidence is rejected by the backend.
+### 7. Publish
 
-### 6. Verify
+Connect Freighter on Stellar Testnet only when ready to publish. ZeroSeal never requests or stores the wallet seed phrase or secret key.
 
-The proof artifact is structurally validated and routed through the configured verification boundary.
+### 8. Receipt
 
-The implementation distinguishes between:
+Inspect a receipt only after a real Stellar transaction hash and ledger are available. A local claim identifier can show the reviewed public payload, but it must not pretend that a transaction has been confirmed.
 
-* artifact structural validation;
-* cryptographic proof verification;
-* Soroban verifier status;
-* Claim Registry recording.
-
-ZeroSeal does not trust a client-supplied `verified` value.
-
-### 7. Authorise and record
-
-Freighter presents the Stellar transaction to the researcher for review and signing.
-
-After submission, ZeroSeal records the real transaction hash and reconciles its status against Stellar.
-
-### 8. Inspect
-
-After confirmation, the application exposes:
+After confirmation, the application can expose:
 
 * transaction hash;
 * confirmed ledger;
@@ -221,25 +207,25 @@ ZeroSeal currently includes:
 * deterministic tests;
 * health and readiness endpoints.
 
-## Claim lifecycle
+## Browser Claim State
 
 ```text
 DRAFT
   |
   v
-AWAITING_PROOF
+PRIVATE_EVIDENCE_READY
   |
   v
-PROOF_RECEIVED
+SEAL_GENERATING
   |
   v
-VERIFYING
+SEAL_GENERATED
   |
   v
-VERIFIED
+PUBLIC_CLAIM_REVIEWED
   |
   v
-AWAITING_WALLET_SIGNATURE
+AWAITING_WALLET
   |
   v
 SUBMITTED
@@ -251,16 +237,7 @@ CONFIRMED
 RECEIPT_ISSUED
 ```
 
-Failure states:
-
-```text
-PROOF_REJECTED
-TRANSACTION_FAILED
-EXPIRED
-CANCELLED
-```
-
-Lifecycle transitions are validated by the backend. Clients cannot move claims directly into arbitrary states.
+Failure returns the browser flow to `FAILED` with the user-visible error. Backend claim lifecycle validation remains separate for persisted API claims.
 
 ## Backend API
 
@@ -677,16 +654,17 @@ See `docs/RENDER_DEPLOYMENT.md` for the exact blueprint and Vercel connection st
 The frontend now introduces ZeroSeal in this order:
 
 1. Hero.
-2. Disclosure pain point.
-3. ZeroSeal verification layer.
-4. Guided product tour.
-5. Simple how-it-works flow.
-6. Security disclosure ecosystem logos.
-7. Live Testnet workspace.
+2. Visual product walkthrough.
+3. Live Testnet workspace.
+4. Disclosure pain point.
+5. ZeroSeal verification layer.
+6. Simple how-it-works flow.
+7. Security disclosure ecosystem logos.
 8. Network activity and receipts.
-9. Security use cases and business model.
-10. Product status.
-11. Footer.
+9. Security use cases.
+10. Programme infrastructure and business model.
+11. Product status.
+12. Footer.
 
 ## Roadmap
 
@@ -748,7 +726,7 @@ ZeroSeal is designed for:
 * protocol security teams;
 * organisations that need privacy-preserving claim verification.
 
-ZeroSeal is designed to complement security disclosure workflows used across platforms and communities such as Immunefi, Sherlock, Code4rena, Cantina, Hats Finance and CodeHawks.
+ZeroSeal is designed to complement security disclosure workflows used across platforms and communities such as HackerOne, Immunefi, Code4rena and CodeHawks.
 
 ZeroSeal is an independent project and is not affiliated with or endorsed by these organisations.
 

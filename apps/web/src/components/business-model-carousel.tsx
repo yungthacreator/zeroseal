@@ -5,19 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const SLIDES = [
   {
     title: "Verification credits",
-    text: "Programmes can purchase individual checks or prepaid verification capacity.",
+    text: "Pay per claim check or purchase prepaid capacity.",
   },
   {
-    title: "Programme infrastructure",
-    text: "Policy configuration, claim dashboards, lifecycle tracking and receipt management.",
+    title: "Programme workspace",
+    text: "Policy configuration, claim tracking and receipt management.",
   },
   {
     title: "Custom proof systems",
-    text: "Programme-specific circuits and integrations for defined impact, scope and evidence rules.",
-  },
-  {
-    title: "Settlement integrations",
-    text: "Future escrow and payout integrations can respond to confirmed proof and receipt states.",
+    text: "Programme-specific circuits and integrations.",
   },
 ] as const;
 
@@ -114,6 +110,10 @@ export function BusinessModelCarousel() {
           Next
         </button>
       </div>
+      <p className="business-note">
+        Future work: settlement integrations can respond to confirmed proof and
+        receipt states.
+      </p>
     </section>
   );
 }

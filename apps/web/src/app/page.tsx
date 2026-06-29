@@ -5,7 +5,6 @@ import { HeroActions } from "@/components/hero-actions";
 import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
 import { OnChainActivity } from "@/components/on-chain-activity";
 import { ProductStatusTerminal } from "@/components/product-status-terminal";
-import { ResearcherRegistration } from "@/components/researcher-registration";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
@@ -23,50 +22,48 @@ const verifierContractId =
   process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ?? DEFAULT_VERIFIER_CONTRACT_ID;
 
 const TECH_PIPELINE = [
-  "Private evidence",
-  "Approved proof package",
-  "Public claim",
-  "Wallet approval",
-  "Testnet receipt",
+  "Keep evidence private",
+  "Prove an approved public claim",
+  "Record a Testnet receipt",
 ] as const;
 
 const TRUST_POINTS = [
   "Evidence stays on your device",
-  "Only approved public claim data is exposed",
-  "Confirmed actions receive a Stellar Testnet receipt",
+  "Only approved public data is exposed",
+  "Confirmed actions receive a Testnet receipt",
 ] as const;
 
 const PAIN_POINTS = [
   {
     title: "Reveal too early",
-    text: "A full exploit may be exposed before the researcher receives acknowledgement, protection or clear payout terms.",
+    text: "The complete exploit may be exposed before protection or clear terms exist.",
   },
   {
     title: "Duplicate disputes",
-    text: "A researcher may receive a duplicate decision without enough information to independently understand how the new report overlaps with an earlier private submission.",
+    text: "Researchers may receive a duplicate decision without enough overlap context.",
   },
   {
     title: "Severity disputes",
-    text: "The impact of a finding can become a negotiation before the underlying evidence has been handled safely.",
+    text: "Impact negotiations can begin before the evidence is handled safely.",
   },
   {
     title: "Programme risk",
-    text: "Security teams must separate real, reproducible findings from incomplete or exaggerated reports without creating more exposure.",
+    text: "Teams must separate serious claims from incomplete or exaggerated reports.",
   },
 ] as const;
 
 const SOLUTION_CARDS = [
   {
     title: "Keep the evidence private",
-    text: "Exploit code, exact values, reproduction steps and sensitive witness material remain on the researcher's device.",
+    text: "Exploit code, exact values and reproduction steps stay on the researcher's device.",
   },
   {
     title: "Present only the approved claim",
-    text: "The proof package exposes the programme, policy, threshold and other permitted public inputs without publishing the complete witness.",
+    text: "The proof package exposes permitted public inputs, not the complete witness.",
   },
   {
     title: "Create a durable public record",
-    text: "After wallet approval and Testnet confirmation, ZeroSeal displays an inspectable transaction and replay-resistant receipt.",
+    text: "A confirmed action produces an inspectable Testnet transaction and receipt.",
   },
 ] as const;
 
@@ -86,9 +83,9 @@ const ZEROSEAL_DISCLOSURE = [
 
 const FOOTER_PRODUCT_LINKS = [
   { label: "Why ZeroSeal", href: "#why-zeroseal" },
-  { label: "Guided demo", href: "#guided-demo" },
+  { label: "Demo", href: "#guided-demo" },
+  { label: "Create claim", href: "/create" },
   { label: "How it works", href: "#how-it-works" },
-  { label: "Live workspace", href: "#proof-workspace" },
   { label: "Network activity", href: "#network-activity" },
 ] as const;
 
@@ -115,11 +112,10 @@ export default function Home() {
               <em>Keep the exploit private.</em>
             </h1>
             <p className="lede hero__lede">
-              ZeroSeal helps security researchers present a permitted impact
-              claim without revealing the full exploit first. Sensitive evidence
-              stays on the researcher&apos;s device while the public claim,
-              wallet approval and confirmed Stellar receipt remain
-              independently inspectable.
+              ZeroSeal helps researchers present an approved impact claim
+              without revealing the full exploit first. Sensitive evidence stays
+              on their device while the public claim, wallet approval and
+              confirmed Stellar receipt remain inspectable.
             </p>
             <HeroActions />
             <ul className="hero__trust" aria-label="ZeroSeal trust points">
@@ -135,93 +131,93 @@ export default function Home() {
               </ol>
               <p>
                 <span className="live-dot" aria-hidden="true" />
-                Live demo on Stellar Testnet
+                Create, demo or verify on Stellar Testnet
               </p>
             </div>
           </div>
         </section>
 
+        <GuidedProofDemo />
+
+        <CredibilityMarquee />
+
         <section className="section section--cream story-section" id="why-zeroseal">
           <div className="shell">
-            <header className="section__head">
-              <p className="eyebrow">THE DISCLOSURE TRUST GAP</p>
-              <h2 className="display display--lg">
-                Researchers should not have to reveal everything just to be
-                believed.
-              </h2>
-              <p className="lede">
-                Security disclosure often begins with an uncomfortable
-                trade-off. A researcher may need to expose sensitive exploit
-                details before scope, severity, priority or payment has been
-                agreed. At the same time, a programme needs enough evidence to
-                distinguish a serious finding from an incomplete or exaggerated
-                claim.
-              </p>
-            </header>
-            <div className="story-grid story-grid--four">
-              {PAIN_POINTS.map((card) => (
-                <article className="story-card" key={card.title}>
-                  <h3>{card.title}</h3>
-                  <p>{card.text}</p>
-                </article>
-              ))}
+            <div className="story-split">
+              <header className="section__head">
+                <p className="eyebrow">THE DISCLOSURE TRUST GAP</p>
+                <h2 className="display display--lg">
+                  Researchers should not have to reveal everything just to be
+                  believed.
+                </h2>
+                <p className="lede">
+                  Researchers may need to expose sensitive details before scope,
+                  severity or payment is agreed. Programmes still need enough
+                  assurance to identify a serious claim.
+                </p>
+              </header>
+              <div className="story-grid story-grid--four">
+                {PAIN_POINTS.map((card) => (
+                  <article className="story-card" key={card.title}>
+                    <h3>{card.title}</h3>
+                    <p>{card.text}</p>
+                  </article>
+                ))}
+              </div>
             </div>
             <p className="story-closing">
-              Both sides are asked to trust before either side has enough
-              protection.
+              Both sides are asked to trust too early.
             </p>
           </div>
         </section>
 
         <section className="section section--paper story-section" id="zeroseal-layer">
           <div className="shell">
-            <header className="section__head">
-              <p className="eyebrow">THE ZEROSEAL LAYER</p>
-              <h2 className="display display--lg">
-                A safer middle step between discovery and disclosure.
-              </h2>
-              <p className="lede">
-                ZeroSeal separates the private evidence from the public claim.
-                The researcher keeps the exploit material locally, the
-                programme defines what may be proven publicly, and Stellar
-                records the confirmed registry action.
-              </p>
-            </header>
-            <div className="story-grid story-grid--three">
-              {SOLUTION_CARDS.map((card) => (
-                <article className="story-card story-card--solution" key={card.title}>
-                  <h3>{card.title}</h3>
-                  <p>{card.text}</p>
-                </article>
-              ))}
+            <div className="zeroseal-layer-panel">
+              <header className="section__head">
+                <p className="eyebrow">THE ZEROSEAL LAYER</p>
+                <h2 className="display display--lg">
+                  A safer middle step between discovery and disclosure.
+                </h2>
+                <p className="lede">
+                  Private evidence stays with the researcher. Only the approved
+                  public claim moves through verification and the confirmed
+                  registry action is recorded on Stellar.
+                </p>
+              </header>
+              <div className="story-grid story-grid--three">
+                {SOLUTION_CARDS.map((card) => (
+                  <article className="story-card story-card--solution" key={card.title}>
+                    <span className="story-card__icon" aria-hidden="true" />
+                    <h3>{card.title}</h3>
+                    <p>{card.text}</p>
+                  </article>
+                ))}
+              </div>
             </div>
-            <p className="positioning-statement">
-              ZeroSeal is not a bug bounty marketplace and it does not replace
-              human triage. It is a verification layer that can sit between
-              private evidence, programme review and settlement.
-            </p>
-            <div className="comparison-table" aria-label="Disclosure comparison">
-              <section>
-                <h3>Traditional disclosure</h3>
-                <ul>
-                  {TRADITIONAL_DISCLOSURE.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </section>
-              <section>
-                <h3>ZeroSeal-assisted disclosure</h3>
-                <ul>
-                  {ZEROSEAL_DISCLOSURE.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </section>
-            </div>
+            <details className="technical-details comparison-details">
+              <summary>Compare disclosure paths</summary>
+              <div className="comparison-table" aria-label="Disclosure comparison">
+                <section>
+                  <h3>Traditional disclosure</h3>
+                  <ul>
+                    {TRADITIONAL_DISCLOSURE.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <h3>ZeroSeal-assisted disclosure</h3>
+                  <ul>
+                    {ZEROSEAL_DISCLOSURE.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              </div>
+            </details>
           </div>
         </section>
-
-        <GuidedProofDemo />
 
         <section className="section section--dotted" id="how-it-works">
           <div className="shell">
@@ -233,17 +229,13 @@ export default function Home() {
                 </h2>
               </div>
               <p className="lede">
-                ZeroSeal turns a sensitive security finding into a controlled
-                public claim without publishing the complete exploit.
+                Move from private evidence to a public receipt without turning
+                the homepage into a technical document.
               </p>
             </header>
             <HowItWorksTerminal />
           </div>
         </section>
-
-        <CredibilityMarquee />
-
-        <ResearcherRegistration />
 
         <OnChainActivity />
 
@@ -257,8 +249,8 @@ export default function Home() {
                 </h2>
               </div>
               <p className="lede">
-                The lifecycle reflects genuine local wallet state, retained
-                receipts and configured Testnet contracts.
+                ZeroSeal shows transaction data only after a real confirmation
+                or retained receipt exists.
               </p>
             </header>
             <StellarActivity />
@@ -279,9 +271,8 @@ export default function Home() {
                 Verification infrastructure for security programmes.
               </h2>
               <p className="lede">
-                ZeroSeal can provide privacy-preserving claim checks, programme
-                policy configuration and auditable public receipts as reusable
-                infrastructure.
+                Programmes can configure claim rules, verification capacity and
+                public receipt workflows.
               </p>
             </header>
             <BusinessModelCarousel />

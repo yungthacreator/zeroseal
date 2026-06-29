@@ -2,11 +2,14 @@ export function HeroActions() {
   return (
     <div className="hero-onboarding">
       <div className="hero__actions">
-        <a className="btn btn--primary" href="#guided-demo">
-          Watch the guided demo
+        <a className="btn btn--primary" href="/create">
+          Create a private claim
         </a>
-        <a className="btn btn--outline" href="#proof-workspace">
-          Open live workspace
+        <a className="btn btn--outline" href="/demo">
+          Try a safe demo
+        </a>
+        <a className="btn btn--outline" href="/verify">
+          Verify a receipt
         </a>
       </div>
     </div>

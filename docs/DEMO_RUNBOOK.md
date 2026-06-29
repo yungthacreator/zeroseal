@@ -26,15 +26,15 @@
 
 ## Five-Minute Sequence
 1. Open `https://zeroseal.vercel.app` and state the trust problem: researchers need to prove impact without revealing exploit details.
-2. Show the selected demo programme, snapshot, policy, circuit, network and evidence-binding status.
-3. Open the local evidence manifest, choose safe dummy files if desired, and explain that file contents remain on device.
-4. Load `browser-claim.json` and show the researcher commitment, nullifier, proof artifact digest and public-input digest.
-5. Create the persisted claim through the API if the production or local backend is available.
-6. Explain that ZeroSeal structurally validates the artifact and queues verification; UltraHonk and Soroban verification remain separate truth boundaries.
-7. Connect desktop Freighter on Testnet.
-8. Authorise the Claim Registry transaction only when the presenter intentionally wants to submit a Testnet transaction.
-9. After submission, wait for backend reconciliation and show the real transaction hash and ledger only if returned by Stellar.
-10. Inspect the explorer links and the public receipt only after the API issues it from confirmed transaction state.
+2. Show the homepage entry points: Create a private claim, Try a safe fictional demo, and Verify a public receipt.
+3. Open `/demo` and point out that the demo starts untouched.
+4. Click the fictional demo fill action, then review the programme, target, finding, severity and public threshold.
+5. Open the private evidence step and explain that these values stay in the browser. Do not enter an unpatched real vulnerability in a public demo.
+6. Click Generate private seal. Only now show the researcher fingerprint, nullifier, private evidence digest and recovery bundle.
+7. Review the public payload and confirm that reproduction steps, raw evidence, private witness values, salt and unpublished report text are absent.
+8. Connect desktop Freighter on Testnet only when the presenter intentionally wants to publish.
+9. Authorise the Claim Registry transaction only after reviewing the wallet prompt.
+10. Inspect `/verify` or `/receipt/[identifier]`. Show a confirmed receipt only when a real Stellar transaction hash and ledger are available.
 
 ## Expected Claim Statuses
 - `AWAITING_PROOF` after claim creation.
@@ -46,7 +46,7 @@
 - `RECEIPT_ISSUED` only after receipt creation from confirmed transaction state.
 
 ## Plain-English Explanation
-ZeroSeal keeps private evidence and witness material away from the public workflow. The current demo proves that a supported public-input shape can move through a persisted claim lifecycle, wallet-authorised Stellar Testnet transaction, reconciliation and receipt path. It does not yet prove that arbitrary local evidence files are cryptographically bound into the v1 proof.
+ZeroSeal keeps private evidence and witness material away from the public workflow. The browser wizard creates a local private seal after explicit user action, then publishes only reviewed public fields. The current circuit supports a private impact threshold predicate for the approved double-withdrawal or stale-entitlement class. It does not prove arbitrary exploit validity or cryptographically bind every local evidence file into the v1 proof.
 
 ## Fallbacks
 - Production API unavailable: say the frontend is live, backend deployment is pending, and run the local API.

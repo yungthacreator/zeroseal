@@ -894,37 +894,6 @@ export function ResearcherRegistration() {
     };
   })();
 
-  const signatureNode: RailNode = (() => {
-    if (
-      registrationState === "matched" ||
-      submissionState === "submitting" ||
-      submissionState === "confirmed"
-    ) {
-      return {
-        id: "signature",
-        label: "Wallet approval",
-        value: "Authorised",
-        state: "verified",
-      };
-    }
-
-    if (submissionState === "awaiting-signature") {
-      return {
-        id: "signature",
-        label: "Wallet approval",
-        value: "Awaiting approval",
-        state: "checking",
-      };
-    }
-
-    return {
-      id: "signature",
-      label: "Wallet approval",
-      value: "Ready for wallet",
-      state: "pending",
-    };
-  })();
-
   const confirmationNode: RailNode = (() => {
     if (registrationState === "matched" || submissionState === "confirmed") {
       return {
@@ -932,6 +901,15 @@ export function ResearcherRegistration() {
         label: "Stellar confirmation",
         value: "Confirmed",
         state: "verified",
+      };
+    }
+
+    if (submissionState === "awaiting-signature") {
+      return {
+        id: "confirmation",
+        label: "Stellar confirmation",
+        value: "Review in wallet",
+        state: "checking",
       };
     }
 
@@ -983,7 +961,7 @@ export function ResearcherRegistration() {
     return {
       id: "confirmation",
       label: "Stellar confirmation",
-      value: "Submitted",
+      value: "Waiting",
       state: "pending",
     };
   })();
@@ -1014,7 +992,6 @@ export function ResearcherRegistration() {
     registryNode,
     commitmentNode,
     backendNode,
-    signatureNode,
     confirmationNode,
   ];
 
@@ -1116,14 +1093,14 @@ export function ResearcherRegistration() {
     }
 
     if (registrationState === "matched") {
-      return "Open the real transaction and receipt. Do not treat a registration lookup without a retained transaction hash as a newly submitted transaction.";
+      return "Open the real receipt after confirmation.";
     }
 
     if (registrationState === "available") {
-      return "Create the claim record, then continue to wallet approval when you are ready.";
+      return "Review the contract and action inside Freighter.";
     }
 
-    return "ZeroSeal is checking the live Testnet state for this wallet and fingerprint.";
+    return "ZeroSeal is checking the live Testnet state.";
   })();
 
   const submitRegistration = async () => {
@@ -1279,14 +1256,18 @@ export function ResearcherRegistration() {
           <p className="zs-reg-intro__eyebrow zs-intro-kicker">LIVE TESTNET WORKSPACE</p>
           <h2 className="zs-reg-intro__title zs-intro-title" id="zs-reg-heading">Try the real claim flow.</h2>
           <p className="zs-reg-intro__lede zs-intro-note">
-            Load the approved sample proof, review the automatically generated
-            fingerprint, create the claim and authorise the registry action
-            through Freighter.
+            Load the sample proof, review the generated fingerprint, create the
+            claim and approve the registry action through Freighter.
           </p>
-          <p className="workspace-warning">
-            This workspace can create a real Stellar Testnet transaction. Review
-            every wallet request before approval.
-          </p>
+          <div className="safety-notice" role="note">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3.2 18.5 6v5.2c0 4.2-2.5 7.8-6.5 9.6-4-1.8-6.5-5.4-6.5-9.6V6L12 3.2Z" />
+            </svg>
+            <span>
+              <strong>Real Testnet action</strong>
+              Freighter shows the exact transaction before anything is submitted.
+            </span>
+          </div>
         </header>
 
         <section className="programme-selector" aria-label="Selected programme">
@@ -1390,7 +1371,7 @@ export function ResearcherRegistration() {
         </div>
 
         <aside className="next-panel" aria-live="polite">
-          <span>What happens next</span>
+          <span>Next step</span>
           <p>{whatHappensNext}</p>
         </aside>
 
@@ -1437,9 +1418,8 @@ export function ResearcherRegistration() {
               <div className="workspace-guide">
                 <h3>Guided view</h3>
                 <p>
-                  Work through the real flow from top to bottom. ZeroSeal will
-                  load the sample proof package, read the researcher fingerprint
-                  and only request a wallet approval when you choose to continue.
+                  Work through the real flow. ZeroSeal reads the fingerprint
+                  after the sample proof package loads.
                 </p>
                 <ol>
                   <li>Load sample proof package</li>
@@ -1469,10 +1449,12 @@ export function ResearcherRegistration() {
               <details className="zs-advanced-evidence">
                 <summary>Optional local evidence seal</summary>
                 <p>
-                  Your files remain on this device. ZeroSeal creates a local
-                  fingerprint of the selected bundle. In this version, that
-                  fingerprint is attached to the claim but is not yet
-                  cryptographically bound by the security-impact circuit.
+                  Creates a local fingerprint of selected evidence files. The
+                  files remain on this device.
+                </p>
+                <p>
+                  Technical detail: the current circuit does not yet bind this
+                  evidence seal as a proof public input.
                 </p>
                 <EvidenceManifest
                   compact
@@ -1523,10 +1505,7 @@ export function ResearcherRegistration() {
                   </span>
                 </div>
                 <p className="zs-field__hint">
-                  ZeroSeal reads this value automatically when the approved
-                  proof package is loaded. It is a fixed cryptographic
-                  fingerprint linked to the package and does not reveal the
-                  private witness.
+                  Read automatically from the approved proof package.
                 </p>
 
                 <div className="zs-input" data-state={inputState}>
@@ -1561,14 +1540,13 @@ export function ResearcherRegistration() {
                 </div>
 
                 <p className="zs-field__hint">
-                  You do not calculate or paste this value. Load the approved
-                  proof package and ZeroSeal fills it in automatically.
+                  You do not calculate or paste this value.
                 </p>
                 <details className="technical-details technical-details--compact">
                   <summary>Technical name: researcher commitment</summary>
                   <p>
-                    This hexadecimal value is used by the registry. It is shown
-                    for technical inspection and is not the private exploit.
+                    This value identifies the approved proof package without
+                    revealing the private witness.
                   </p>
                   <button
                     type="button"
@@ -1656,7 +1634,9 @@ export function ResearcherRegistration() {
                 ? "Receipt issued"
                 : registrationState === "matched"
                   ? "Confirmed"
-                  : "Submitted"}
+                  : submissionState === "submitting"
+                    ? "Submitted"
+                    : "Waiting"}
             </strong>
           </div>
         </div>

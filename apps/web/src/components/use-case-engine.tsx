@@ -1,24 +1,22 @@
 const USE_CASES = [
   {
     title: "Private impact verification",
-    text: "Show that a vulnerability meets a published loss or severity threshold without revealing the complete exploit first.",
-    label: "Current focus",
+    text: "Present a permitted impact claim without revealing the complete exploit first.",
   },
   {
-    title: "Priority and authorship record",
-    text: "Create a time-linked public record of the approved researcher fingerprint and confirmed registry action.",
-    label: "Current focus",
+    title: "Priority record",
+    text: "Create a time-linked record of the approved fingerprint and registry action.",
   },
   {
-    title: "Safer staged disclosure",
-    text: "Share the public claim first, complete programme review second, and disclose the full technical report through an agreed private channel.",
-    label: "Current focus",
+    title: "Staged disclosure",
+    text: "Review the public claim first and share the full report privately.",
   },
-  {
-    title: "Future duplicate-proof circuits",
-    text: "A future programme-specific circuit could prove that two private submissions satisfy a defined overlap rule without exposing the earlier report.",
-    label: "Future extension",
-  },
+] as const;
+
+const FUTURE_EXTENSIONS = [
+  "duplicate-overlap circuits",
+  "escrow integrations",
+  "programme-specific proof rules",
 ] as const;
 
 export function UseCaseEngine() {
@@ -30,26 +28,33 @@ export function UseCaseEngine() {
           Security workflows first.
         </h2>
         <p className="lede">
-          ZeroSeal is shaped for security researchers and programmes that need a
-          safer path between private evidence and public assurance.
+          ZeroSeal supports the moment between a private finding and a public
+          receipt.
         </p>
       </div>
 
       <div className="security-use-cases__grid">
         {USE_CASES.map((item) => (
           <article key={item.title}>
-            <span>{item.label}</span>
             <h3>{item.title}</h3>
             <p>{item.text}</p>
-            {item.title === "Priority and authorship record" ? (
+            {item.title === "Priority record" ? (
               <small>
-                This record supports review, but does not by itself legally
-                prove authorship.
+                This record does not by itself legally prove authorship.
               </small>
             ) : null}
           </article>
         ))}
       </div>
+
+      <details className="technical-details security-use-cases__future">
+        <summary>Future extensions</summary>
+        <ul>
+          {FUTURE_EXTENSIONS.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

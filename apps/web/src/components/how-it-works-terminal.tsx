@@ -1,23 +1,23 @@
 const STEPS = [
   {
     title: "Prepare privately",
-    text: "The researcher keeps the report, exploit code, reproduction steps and private values on their own device.",
+    text: "Keep the report and sensitive witness on the device.",
   },
   {
     title: "Load the approved proof",
-    text: "ZeroSeal loads the supported proof artifact and reads the public claim data allowed by the programme.",
+    text: "ZeroSeal reads the supported public claim data.",
   },
   {
     title: "Create the claim record",
-    text: "The backend creates a policy-linked claim and tracks its verification lifecycle without storing the private exploit files.",
+    text: "The backend tracks the policy-linked claim lifecycle.",
   },
   {
     title: "Approve the Testnet action",
-    text: "The researcher reviews and signs the exact Claim Registry transaction through Freighter.",
+    text: "Freighter shows the exact registry transaction.",
   },
   {
     title: "Inspect the receipt",
-    text: "A confirmed transaction exposes the public result, ledger, registry contract and receipt through ZeroSeal and a Stellar explorer.",
+    text: "View the real transaction and receipt after confirmation.",
   },
 ] as const;
 
@@ -39,6 +39,7 @@ export function HowItWorksTerminal() {
         {STEPS.map((step, index) => (
           <li key={step.title}>
             <span>{String(index + 1).padStart(2, "0")}</span>
+            <i aria-hidden="true" />
             <h3>{step.title}</h3>
             <p>{step.text}</p>
           </li>
