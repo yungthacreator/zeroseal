@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getBackendReceipt,
+  getBackendTransaction,
+  type ApiReceipt,
+  type ApiTransaction,
+} from "@/lib/api/claims";
 import type { PublicPayload } from "@/lib/claim-flow";
 import { shortenAddress } from "@/lib/presentation";
 import {
@@ -17,6 +23,8 @@ type LoadState =
   | { phase: "invalid" }
   | { phase: "missing" }
   | { phase: "public-claim"; payload: PublicPayload }
+  | { phase: "backend-receipt"; receipt: ApiReceipt }
+  | { phase: "backend-transaction"; transaction: ApiTransaction }
   | { phase: "failed"; tx: HorizonTransaction }
   | { phase: "confirmed"; tx: HorizonTransaction };
 
@@ -52,7 +60,17 @@ export default function ReceiptPage() {
   useEffect(() => {
     if (!hashIsValid) {
       let cancelled = false;
-      const timer = window.setTimeout(() => {
+      const timer = window.setTimeout(async () => {
+        try {
+          const receipt = await getBackendReceipt(hash);
+          if (!cancelled) {
+            setState({ phase: "backend-receipt", receipt });
+            return;
+          }
+        } catch {
+          // Continue to the local unconfirmed public-claim explanation.
+        }
+
         try {
           const raw = window.localStorage.getItem(`zeroseal:public-claim:${hash}`);
           if (!cancelled && raw) {
@@ -75,6 +93,14 @@ export default function ReceiptPage() {
     }
 
     const controller = new AbortController();
+
+    getBackendTransaction(hash)
+      .then((transaction) => {
+        if (!controller.signal.aborted && transaction.status === "CONFIRMED") {
+          setState({ phase: "backend-transaction", transaction });
+        }
+      })
+      .catch(() => undefined);
 
     fetchTestnetTransaction(hash, controller.signal)
       .then((tx) => {
@@ -194,6 +220,62 @@ export default function ReceiptPage() {
                 {copied === "url" ? "Copied" : "Copy receipt URL"}
               </button>
             </div>
+          </div>
+        ) : null}
+
+        {state.phase === "backend-receipt" ? (
+          <div className="receipt-page__card">
+            <div className="receipt-page__head">
+              <p>ZeroSeal public receipt</p>
+              <h1>Confirmed on Stellar Testnet</h1>
+            </div>
+            <dl className="receipt-page__rows">
+              <ReceiptRow label="Network" value={state.receipt.network} />
+              <ReceiptRow label="Status" value="Confirmed" tone="ok" />
+              <ReceiptRow label="Claim ID" value={state.receipt.claimId} mono />
+              <ReceiptRow label="Transaction" value={state.receipt.transactionHash} mono />
+              <ReceiptRow label="Ledger" value={String(state.receipt.ledgerNumber)} mono />
+              <ReceiptRow label="Contract ID" value={state.receipt.registryContract} mono />
+              <ReceiptRow label="Shortened seal" value={shortenAddress(state.receipt.researcherCommitment)} mono />
+              <ReceiptRow label="Public rule" value={state.receipt.policyIdentifier} />
+              <ReceiptRow label="Confirmed at" value={formatCreatedAt(state.receipt.issuedAt) ?? state.receipt.issuedAt} />
+            </dl>
+            <div className="receipt-page__actions">
+              <a
+                className="btn btn--primary btn--sm"
+                href={state.receipt.explorerTransactionUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                View on Stellar Explorer
+              </a>
+            </div>
+          </div>
+        ) : null}
+
+        {state.phase === "backend-transaction" ? (
+          <div className="receipt-page__card">
+            <div className="receipt-page__head">
+              <p>ZeroSeal transaction record</p>
+              <h1>Confirmed transaction found</h1>
+            </div>
+            <dl className="receipt-page__rows">
+              <ReceiptRow label="Network" value="Stellar Testnet" />
+              <ReceiptRow label="Status" value="Confirmed" tone="ok" />
+              <ReceiptRow label="Transaction" value={state.transaction.transactionHash} mono />
+              {state.transaction.ledgerNumber ? (
+                <ReceiptRow label="Ledger" value={String(state.transaction.ledgerNumber)} mono />
+              ) : null}
+              {state.transaction.contractId ? (
+                <ReceiptRow label="Contract ID" value={state.transaction.contractId} mono />
+              ) : null}
+              {state.transaction.researcherCommitment ? (
+                <ReceiptRow label="Shortened seal" value={shortenAddress(state.transaction.researcherCommitment)} mono />
+              ) : null}
+              {state.transaction.confirmedAt ? (
+                <ReceiptRow label="Confirmed at" value={formatCreatedAt(state.transaction.confirmedAt) ?? state.transaction.confirmedAt} />
+              ) : null}
+            </dl>
           </div>
         ) : null}
 

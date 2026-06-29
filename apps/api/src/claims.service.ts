@@ -392,6 +392,7 @@ export class ClaimsService {
     ];
     const isRegistrationTransaction = input.method === "register_researcher";
     const registrationStatuses: ClaimStatus[] = [
+      ClaimStatus.AWAITING_PROOF,
       ClaimStatus.PROOF_RECEIVED,
       ClaimStatus.VERIFYING,
       ClaimStatus.AWAITING_WALLET_SIGNATURE,

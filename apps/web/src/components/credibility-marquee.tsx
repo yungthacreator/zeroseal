@@ -66,11 +66,11 @@ export function CredibilityMarquee() {
           SECURITY DISCLOSURE ECOSYSTEM
         </h2>
         <h3 className="display display--md">
-          Designed for the workflows researchers already use.
+          Fits the disclosure paths researchers already use.
         </h3>
         <p className="credibility-marquee__lede">
-          ZeroSeal can add a privacy-preserving verification and receipt layer
-          to existing security research and disclosure workflows.
+          ZeroSeal adds a private verification and receipt layer before the
+          complete report is disclosed.
         </p>
         <div className="credibility-marquee__viewport">
           <div className="credibility-marquee__motion">

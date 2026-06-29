@@ -59,7 +59,13 @@ void test("Try ZeroSeal example data is explicit and still starts unsealed", () 
   const draft = createExampleDemoDraft();
 
   assert.equal(draft.demoMode, true);
-  assert.match(draft.findingTitle, /Example/i);
+  assert.equal(draft.reportingContext, "Immunefi");
+  assert.equal(draft.programmeName, "Example Vault Programme");
+  assert.equal(draft.affectedComponent, "withdraw()");
+  assert.equal(draft.claimedSeverity, "Critical");
+  assert.equal(draft.publicClaim.publicThreshold, "50000");
+  assert.equal(draft.privateEvidence.privateImpactValues, "100000");
+  assert.match(draft.findingTitle, /Unauthorised withdrawal/);
   assert.equal(draft.researcherFingerprint, null);
   assert.equal(draft.state, "DRAFT");
 });
@@ -76,6 +82,40 @@ void test("private seal generation is deterministic with supplied salt", async (
   assert.equal(seal.privateEvidenceDigest, repeat.privateEvidenceDigest);
   assert.equal(seal.nullifier, repeat.nullifier);
   assert.match(seal.researcherFingerprint, /^[0-9a-f]{64}$/);
+});
+
+void test("private seal changes when private evidence changes", async () => {
+  const first = await generatePrivateSeal(completeDraft, {
+    saltHex: "44".repeat(32),
+  });
+  const changed = await generatePrivateSeal(
+    {
+      ...completeDraft,
+      privateEvidence: {
+        ...completeDraft.privateEvidence,
+        reproductionSteps: "1. Different private step",
+      },
+    },
+    { saltHex: "44".repeat(32) },
+  );
+
+  assert.notEqual(first.privateEvidenceDigest, changed.privateEvidenceDigest);
+  assert.notEqual(first.researcherFingerprint, changed.researcherFingerprint);
+});
+
+void test("public claim stays stable after seal generation with fixed timestamp", async () => {
+  const seal = await generatePrivateSeal(completeDraft, {
+    saltHex: "55".repeat(32),
+  });
+  const options = {
+    researcherPublicKey: "G_PUBLIC_TEST_KEY",
+    timestamp: "2026-06-30T00:00:00.000Z",
+  };
+
+  assert.deepEqual(
+    await buildPublicPayloadAsync(completeDraft, seal, options),
+    await buildPublicPayloadAsync(completeDraft, seal, options),
+  );
 });
 
 void test("secure salt generation does not expose Math.random state", async () => {

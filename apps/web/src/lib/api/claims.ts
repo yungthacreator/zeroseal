@@ -54,6 +54,22 @@ export type ApiTransaction = {
   confirmedAt: string | null;
 };
 
+export type ApiReceipt = {
+  receiptId: string;
+  claimId: string;
+  transactionHash: string;
+  ledgerNumber: number;
+  registryContract: string;
+  verifierContract: string;
+  network: string;
+  walletAddress: string;
+  researcherCommitment: string;
+  nullifier: string | null;
+  policyIdentifier: string;
+  issuedAt: string;
+  explorerTransactionUrl: string;
+};
+
 export type ApiErrorState = {
   code: string;
   message: string;
@@ -76,6 +92,10 @@ function apiBase(): string {
   );
 }
 
+export function getConfiguredApiBase(): string {
+  return apiBase();
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -85,7 +105,18 @@ async function request<T>(
   if (!base) {
     throw {
       code: "API_UNCONFIGURED",
-      message: "Production API is not configured",
+      message: "Production API URL is missing",
+    } satisfies ApiErrorState;
+  }
+
+  if (
+    typeof window !== "undefined" &&
+    !["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname) &&
+    /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/i.test(base)
+  ) {
+    throw {
+      code: "API_MISCONFIGURED",
+      message: "Production API cannot point to localhost",
     } satisfies ApiErrorState;
   }
 
@@ -170,6 +201,18 @@ export function recordBackendTransaction(
 
 export function getBackendClaim(claimId: string) {
   return request<ApiClaim>(`/api/v1/claims/${claimId}`);
+}
+
+export function getBackendClaimReceipt(claimId: string) {
+  return request<ApiReceipt>(`/api/v1/claims/${claimId}/receipt`);
+}
+
+export function getBackendReceipt(receiptId: string) {
+  return request<ApiReceipt>(`/api/v1/receipts/${receiptId}`);
+}
+
+export function getBackendTransaction(transactionHash: string) {
+  return request<ApiTransaction>(`/api/v1/transactions/${transactionHash}`);
 }
 
 export function getWalletActivity(address: string) {

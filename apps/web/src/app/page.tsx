@@ -1,11 +1,11 @@
 import { BusinessModelCarousel } from "@/components/business-model-carousel";
+import { CompactClaimWorkspace } from "@/components/compact-claim-workspace";
 import { CredibilityMarquee } from "@/components/credibility-marquee";
 import { GuidedProofDemo } from "@/components/guided-proof-demo";
 import { HeroActions } from "@/components/hero-actions";
 import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
 import { OnChainActivity } from "@/components/on-chain-activity";
 import { ProductStatusTerminal } from "@/components/product-status-terminal";
-import { ResearcherRegistration } from "@/components/researcher-registration";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
@@ -29,46 +29,37 @@ const TECH_PIPELINE = [
 ] as const;
 
 const TRUST_POINTS = [
-  "Evidence stays on your device",
-  "Only approved public data is exposed",
-  "Confirmed actions receive a Testnet receipt",
+  "Private by default",
+  "Public claim approved by you",
+  "Receipt confirmed on Testnet",
 ] as const;
 
-const TRUST_GAP_ROWS = [
-  {
-    tension: "Early triage",
-    current: "The reporter shares sensitive mechanics before the programme has made a decision.",
-    zeroseal: "The reporter creates a private seal and exposes only the approved public claim.",
-  },
-  {
-    tension: "Overlap review",
-    current: "Duplicate decisions often sit inside one platform or inbox.",
-    zeroseal: "A policy-linked fingerprint and nullifier give both sides a public reference.",
-  },
-  {
-    tension: "Impact confidence",
-    current: "Severity is negotiated while raw evidence is still risky to move around.",
-    zeroseal: "The public threshold and private seal separate impact signal from exploit detail.",
-  },
-  {
-    tension: "Public record",
-    current: "The proof trail stays fragmented across screenshots, ticket notes and private mail.",
-    zeroseal: "A confirmed Stellar Testnet action creates an inspectable receipt after approval.",
-  },
+const TRUST_CONFLICTS = [
+  "Early disclosure",
+  "Duplicate disagreement",
+  "Severity disagreement",
 ] as const;
 
-const SOLUTION_CARDS = [
+const ZEROSEAL_STAGES = [
   {
-    title: "Keep the evidence private",
-    text: "Reports, PoCs, screenshots, notes and witness values stay on the researcher's device.",
+    title: "Private evidence",
+    text: "Report detail stays local.",
   },
   {
-    title: "Present only the approved claim",
-    text: "ZeroSeal prepares the programme, threshold, fingerprint and nullifier as public fields.",
+    title: "Local seal",
+    text: "A commitment is created in the browser.",
   },
   {
-    title: "Create a durable public record",
-    text: "After wallet approval, Stellar Testnet records an inspectable registry action and receipt.",
+    title: "Approved public claim",
+    text: "Only selected fields move forward.",
+  },
+  {
+    title: "Threshold proof",
+    text: "The current circuit checks the public threshold.",
+  },
+  {
+    title: "Stellar receipt",
+    text: "A confirmed Testnet record can be inspected later.",
   },
 ] as const;
 
@@ -109,18 +100,17 @@ export default function Home() {
         <section className="hero" id="hero">
           <div className="shell hero__inner">
             <p className="eyebrow">
-              PRIVATE BUG EVIDENCE. VERIFIABLE PUBLIC CLAIMS.
+              PROVE THE APPROVED CLAIM. KEEP THE EXPLOIT PRIVATE.
             </p>
             <h1 className="display display--hero hero__headline">
-              Prove the security impact.
+              Prove impact.
               <br />
               <em>Keep the exploit private.</em>
             </h1>
             <p className="lede hero__lede">
-              ZeroSeal helps researchers present an approved impact claim
-              without revealing the full exploit first. Sensitive evidence stays
-              on their device while the public claim, wallet approval and
-              confirmed Stellar receipt remain inspectable.
+              ZeroSeal lets security researchers seal private evidence, reveal
+              only an approved claim and record a verifiable Stellar Testnet
+              receipt.
             </p>
             <HeroActions />
             <ul className="hero__trust" aria-label="ZeroSeal trust points">
@@ -159,19 +149,30 @@ export default function Home() {
                   surface before private exploit detail leaves the reporter.
                 </p>
               </header>
-              <div className="trust-gap__matrix" aria-label="Disclosure trust gap comparison">
-                <div className="trust-gap__matrix-head">
-                  <span>Risk point</span>
-                  <span>Traditional path</span>
-                  <span>ZeroSeal path</span>
-                </div>
-                {TRUST_GAP_ROWS.map((row) => (
-                  <article className="trust-gap__row" key={row.tension}>
-                    <h3>{row.tension}</h3>
-                    <p>{row.current}</p>
-                    <p>{row.zeroseal}</p>
-                  </article>
-                ))}
+              <div className="trust-gap__bridge" aria-label="Disclosure trust gap">
+                <article className="trust-gap__party">
+                  <span>Researcher</span>
+                  <p>
+                    I need to prove that my finding matters without giving away
+                    the full exploit first.
+                  </p>
+                </article>
+                <article className="trust-gap__seal">
+                  <span>ZeroSeal</span>
+                  <p>An approved public claim backed by private evidence.</p>
+                </article>
+                <article className="trust-gap__party">
+                  <span>Security programme</span>
+                  <p>
+                    I need enough evidence to accept, prioritise and pay for a
+                    serious claim.
+                  </p>
+                </article>
+                <ul className="trust-gap__conflicts">
+                  {TRUST_CONFLICTS.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
@@ -191,12 +192,15 @@ export default function Home() {
                   registry action is recorded on Stellar.
                 </p>
               </header>
-              <div className="story-grid story-grid--three">
-                {SOLUTION_CARDS.map((card) => (
-                  <article className="story-card story-card--solution" key={card.title}>
-                    <span className="story-card__icon" aria-hidden="true" />
-                    <h3>{card.title}</h3>
-                    <p>{card.text}</p>
+              <div className="zeroseal-stage-flow" aria-label="ZeroSeal verification layer flow">
+                {ZEROSEAL_STAGES.map((stage, index) => (
+                  <article className="zeroseal-stage" key={stage.title}>
+                    <span className="zeroseal-stage__icon" aria-hidden="true" />
+                    <h3>{stage.title}</h3>
+                    <p>{stage.text}</p>
+                    {index < ZEROSEAL_STAGES.length - 1 ? (
+                      <span className="zeroseal-stage__arrow" aria-hidden="true">v</span>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -225,7 +229,7 @@ export default function Home() {
           </div>
         </section>
 
-        <ResearcherRegistration />
+        <CompactClaimWorkspace />
 
         <section className="section section--dotted" id="how-it-works">
           <div className="shell">

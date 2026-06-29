@@ -23,19 +23,41 @@ export class HealthController {
 
   @Get("/ready")
   async ready() {
+    const checks = {
+      database: "unknown",
+      redis: "optional" as "optional" | "ready" | "unavailable",
+    };
+
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-      await checkRedisReady(this.config.REDIS_URL);
-      return {
-        status: "ready",
-        service: "zeroseal-api",
-        time: new Date().toISOString(),
-      };
+      checks.database = "ready";
     } catch {
       throw new ServiceUnavailableException({
         code: "SERVICE_DEPENDENCY_UNAVAILABLE",
-        message: "Database or queue service is not ready.",
+        message: "Database is not ready.",
+        checks,
       });
     }
+
+    try {
+      await checkRedisReady(this.config.REDIS_URL);
+      checks.redis = "ready";
+    } catch {
+      checks.redis = "unavailable";
+      if (this.config.REDIS_REQUIRED_FOR_READY) {
+        throw new ServiceUnavailableException({
+          code: "SERVICE_DEPENDENCY_UNAVAILABLE",
+          message: "Redis is required but unavailable.",
+          checks,
+        });
+      }
+    }
+
+    return {
+      status: "ready",
+      service: "zeroseal-api",
+      time: new Date().toISOString(),
+      checks,
+    };
   }
 }

@@ -56,7 +56,19 @@ void test("config uses RENDER_EXTERNAL_URL as production API public URL", () => 
 
   assert.equal(parsed.API_PUBLIC_URL, "https://zeroseal-api.onrender.com");
   assert.equal(parsed.RUN_EMBEDDED_WORKER, true);
+  assert.equal(parsed.REDIS_REQUIRED_FOR_READY, false);
   assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, ["https://zeroseal.vercel.app"]);
+});
+
+void test("production readiness can explicitly require Redis", () => {
+  const parsed = configSchema.parse({
+    ...baseEnv,
+    NODE_ENV: "production",
+    CORS_ALLOWED_ORIGINS: "https://zeroseal.vercel.app",
+    REDIS_REQUIRED_FOR_READY: "true",
+  });
+
+  assert.equal(parsed.REDIS_REQUIRED_FOR_READY, true);
 });
 
 void test("production config does not invent a local API public URL", () => {

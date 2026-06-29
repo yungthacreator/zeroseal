@@ -505,7 +505,7 @@ export function ResearcherRegistration() {
           setProgrammeCanRetry(true);
           setProgrammeMessage(
             apiError?.code === "API_UNCONFIGURED"
-              ? "Production API is not configured"
+              ? "Production API URL is missing"
               : "Verification service is not ready",
           );
         }

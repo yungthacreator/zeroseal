@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ClaimWizard } from "@/components/claim-wizard";
 
 export const metadata = {
@@ -7,5 +8,9 @@ export const metadata = {
 };
 
 export default function DemoPage() {
-  return <ClaimWizard mode="demo" />;
+  return (
+    <Suspense fallback={null}>
+      <ClaimWizard mode="demo" />
+    </Suspense>
+  );
 }

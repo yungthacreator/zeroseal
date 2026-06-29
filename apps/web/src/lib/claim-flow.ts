@@ -226,35 +226,36 @@ export function createExampleDemoDraft(): ClaimDraft {
   return {
     ...createInitialClaimDraft(),
     demoMode: true,
-    reportingContext: "Directly to a project",
-    programmeName: "Example Vault Security Programme",
+    reportingContext: "Immunefi",
+    programmeName: "Example Vault Programme",
     programmeUrl: "https://example.invalid/example-vault",
-    targetType: "smart contract",
-    targetLocator: "example-vault.testnet",
-    affectedComponent: "withdraw(uint256)",
+    targetType: "Smart contract",
+    targetLocator: "ExampleVault.sol",
+    affectedComponent: "withdraw()",
     network: "Stellar Testnet",
-    findingTitle: "Example smart-contract threshold finding",
+    findingTitle:
+      "Unauthorised withdrawal may exceed the programme's published loss threshold",
     bugCategory: "Access control",
-    claimedSeverity: "High",
+    claimedSeverity: "Critical",
     impactStatement:
-      "An example vault path can demonstrate an impact above the published threshold.",
-    estimatedFinancialImpact: "250000",
+      "The submitted claim states that a private demonstrated loss meets or exceeds the programme's public threshold.",
+    estimatedFinancialImpact: "100000",
     privateEvidence: {
       vulnerabilityDescription:
-        "Example only. No real exploit or live target is used.",
+        "Sample data only. No real target or exploit is used in this prepared claim.",
       reproductionSteps:
-        "1. Review the example programme.\n2. Generate a private seal.\n3. Approve only the public Testnet action.",
-    proofOfConcept: "example-private-outline",
+        "1. Use the prepared ExampleVault threshold claim.\n2. Generate a private seal locally.\n3. Approve only the reviewed public Testnet action.",
+      proofOfConcept: "sample-private-outline",
       affectedCode: "contracts/ExampleVault.sol",
-      screenshotsOrLogs: "example-log-entry",
+      screenshotsOrLogs: "sample-log-entry",
       expectedResult: "The example vault remains balanced.",
-      actualResult: "The example path exceeds the threshold.",
-      privateImpactValues: "250000",
-      privateNotes: "Example data. Do not use an unpatched real finding.",
+      actualResult: "The sample path exceeds the public threshold.",
+      privateImpactValues: "100000",
+      privateNotes: "Sample data. Do not use an unpatched real finding.",
     },
     publicClaim: {
       ...defaultPublicClaim(),
-      publicThreshold: "100000",
+      publicThreshold: "50000",
     },
   };
 }

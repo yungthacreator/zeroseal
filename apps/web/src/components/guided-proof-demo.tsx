@@ -42,11 +42,11 @@ const SCENES = [
 ] as const;
 
 const CONTROL_ICONS = {
-  play: "▶",
-  pause: "Ⅱ",
-  previous: "‹",
-  next: "›",
-  restart: "↻",
+  play: ">",
+  pause: "||",
+  previous: "<",
+  next: ">",
+  restart: "R",
 } as const;
 
 function SceneArtwork({

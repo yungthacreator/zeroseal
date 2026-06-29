@@ -3,9 +3,15 @@
 import { Buffer } from "buffer";
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { useWallet } from "@/context/wallet-context";
+import {
+  createBackendClaim,
+  recordBackendTransaction,
+  type ApiClaim,
+} from "@/lib/api/claims";
 import {
   buildPublicPayloadAsync,
   createExampleDemoDraft,
@@ -30,13 +36,10 @@ type PublishState = "idle" | "preparing" | "awaiting" | "submitting" | "confirme
 
 const STEPS = [
   "Report",
-  "Target",
   "Finding",
-  "Evidence",
-  "Private seal",
-  "Public claim",
-  "Testnet action",
-  "Receipt",
+  "Private evidence",
+  "Seal and public claim",
+  "Sign and receipt",
 ] as const;
 
 const REPORTING_CONTEXTS = [
@@ -60,6 +63,21 @@ const TARGET_TYPES = [
 ] as const;
 
 const SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
+
+function isMobileViewport(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+}
+
+function randomToken(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto?.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 function extractTransactionHash(value: unknown): string | null {
   if (!value || typeof value !== "object") {
@@ -126,26 +144,58 @@ function isStepComplete(index: number, step: number, draft: ClaimDraft, reviewed
   if (index < step) {
     return true;
   }
-  if (index === 4) {
+  if (index === 3) {
     return Boolean(draft.privateSeal);
   }
-  if (index === 5) {
+  if (index === 4) {
     return reviewed;
-  }
-  if (index === 7) {
-    return Boolean(draft.receipt?.transactionHash);
   }
   return false;
 }
 
+function publicInputRows(seal: NonNullable<ClaimDraft["privateSeal"]>) {
+  return [
+    {
+      position: 0,
+      name: "researcher_commitment",
+      valueHex: seal.researcherFingerprint,
+    },
+    {
+      position: 1,
+      name: "claim_commitment",
+      valueHex: seal.canonicalClaimHash,
+    },
+    {
+      position: 2,
+      name: "nullifier",
+      valueHex: seal.nullifier,
+    },
+  ];
+}
+
 export function ClaimWizard({ mode }: { mode: WizardMode }) {
-  const [draft, setDraft] = useState<ClaimDraft>(() => createInitialClaimDraft());
+  const searchParams = useSearchParams();
+  const [draft, setDraft] = useState<ClaimDraft>(() => {
+    const initial = createInitialClaimDraft();
+    const path = searchParams.get("path");
+    const severity = searchParams.get("severity");
+    return {
+      ...initial,
+      reportingContext: path ?? initial.reportingContext,
+      claimedSeverity: SEVERITIES.includes(severity as (typeof SEVERITIES)[number])
+        ? (severity as ClaimDraft["claimedSeverity"])
+        : initial.claimedSeverity,
+    };
+  });
   const [step, setStep] = useState(0);
   const [reviewed, setReviewed] = useState(false);
   const [publishState, setPublishState] = useState<PublishState>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [publicPayload, setPublicPayload] = useState<PublicPayload | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [backendClaim, setBackendClaim] = useState<ApiClaim | null>(null);
+  const [mobileSigning, setMobileSigning] = useState(() => isMobileViewport());
+  const [continuationToken, setContinuationToken] = useState<string | null>(null);
   const { address, status, connect } = useWallet();
 
   const seal = draft.privateSeal ?? null;
@@ -160,31 +210,37 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const pageTitle = isTryMode ? "Try ZeroSeal" : "Create a private claim";
   const currentStep = STEPS[step];
 
+  useEffect(() => {
+    const onResize = () => setMobileSigning(isMobileViewport());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const ready = useMemo(() => {
     switch (step) {
       case 0:
-        return Boolean(draft.reportingContext);
+        return Boolean(draft.reportingContext && draft.programmeName && draft.affectedComponent);
       case 1:
-        return Boolean(draft.programmeName && draft.targetType);
+        return Boolean(
+          draft.findingTitle &&
+            draft.claimedSeverity &&
+            draft.bugCategory &&
+            draft.impactStatement &&
+            draft.publicClaim.publicThreshold,
+        );
       case 2:
-        return Boolean(draft.findingTitle && draft.claimedSeverity && draft.bugCategory);
-      case 3:
         return Boolean(
           draft.privateEvidence.vulnerabilityDescription ||
             draft.privateEvidence.reproductionSteps ||
             draft.privateEvidence.proofOfConcept ||
             selectedFiles.length,
         );
-      case 4:
-        return Boolean(seal);
-      case 5:
+      case 3:
         return reviewed;
-      case 6:
-        return Boolean(seal && reviewed);
       default:
         return false;
     }
-  }, [draft, reviewed, seal, selectedFiles.length, step]);
+  }, [draft, reviewed, selectedFiles.length, step]);
 
   const update = (patch: Partial<ClaimDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
@@ -202,7 +258,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
 
   const continueStep = () => {
     setMessage(null);
-    if (step === 3) {
+    if (step === 2) {
       update({ state: nextClaimState("DRAFT", "privateEvidenceReady") });
     }
     if (step < STEPS.length - 1) {
@@ -277,6 +333,28 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     setMessage("Approved public claim prepared. Private evidence remains local.");
   };
 
+  const createContinuation = async () => {
+    if (!seal || !publicPayload) {
+      setMessage("Generate the seal and approve the public claim first.");
+      return;
+    }
+    const token = randomToken();
+    const payload = {
+      expiresAt: new Date(Date.now() + 1000 * 60 * 20).toISOString(),
+      publicPayload,
+      seal: {
+        claimIdentifier: seal.claimIdentifier,
+        researcherFingerprint: seal.researcherFingerprint,
+        nullifier: seal.nullifier,
+        canonicalClaimHash: seal.canonicalClaimHash,
+        privateEvidenceDigest: seal.privateEvidenceDigest,
+      },
+    };
+    window.sessionStorage.setItem(`zeroseal:continuation:${token}`, JSON.stringify(payload));
+    setContinuationToken(token);
+    setMessage("Desktop continuation link created. It contains only approved public claim data.");
+  };
+
   const publish = async () => {
     if (!seal) {
       setMessage("Generate the private seal before publishing.");
@@ -299,6 +377,18 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       storePublicReceipt(payload);
       setPublicPayload(payload);
 
+      const claim =
+        backendClaim ??
+        (await createBackendClaim({
+          walletAddress: address,
+          researcherCommitment: seal.researcherFingerprint,
+          nullifier: seal.nullifier,
+          evidenceCommitment: seal.privateEvidenceDigest,
+          publicInputs: publicInputRows(seal),
+          idempotencyKey: `${seal.claimIdentifier}:${address}`,
+        }));
+      setBackendClaim(claim);
+
       const client = await createClaimRegistryClient(address);
       const transaction = await client.register_researcher({
         researcher: address,
@@ -319,6 +409,17 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         setMessage("Freighter returned no confirmed transaction hash.");
         return;
       }
+
+      await recordBackendTransaction(claim.id, {
+        transactionHash: hash,
+        walletAddress: address,
+        network: "TESTNET",
+        contractId: registryContractId,
+        method: "register_researcher",
+        operationType: "researcher_registration",
+        researcherCommitment: seal.researcherFingerprint,
+        idempotencyKey: `register:${hash}`,
+      });
 
       persistReceipt({
         schemaVersion: 2,
@@ -346,7 +447,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       }));
       setPublishState("confirmed");
       setMessage("Confirmed on Stellar Testnet. Public receipt is ready.");
-      setStep(7);
+      setStep(4);
     } catch (error) {
       setPublishState("failed");
       update({ state: "FAILED" });
@@ -358,7 +459,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     <div className="claim-flow claim-flow--try">
       <div className="claim-flow__topbar">
         <Link className="claim-flow__back" href="/">
-          <span aria-hidden="true">←</span>
+          <span aria-hidden="true">{"<-"}</span>
           Back to ZeroSeal
         </Link>
         <div className="claim-flow__top-actions">
@@ -411,7 +512,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
           {step === 0 ? (
             <section className="claim-step">
               <StepHeader
-                title="Choose the reporting path"
+                title="Report"
                 text="This describes where the report will be handled. ZeroSeal does not submit the private report to the platform."
               />
               <div className="platform-grid">
@@ -432,15 +533,6 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                   </button>
                 ))}
               </div>
-            </section>
-          ) : null}
-
-          {step === 1 ? (
-            <section className="claim-step">
-              <StepHeader
-                title="Describe the programme and target"
-                text="Keep this short. The private evidence comes later and remains local."
-              />
               <div className="claim-fields claim-fields--compact">
                 <Field label="Programme or project" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} />
                 <Field label="Target name" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} />
@@ -450,15 +542,16 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
             </section>
           ) : null}
 
-          {step === 2 ? (
+          {step === 1 ? (
             <section className="claim-step">
               <StepHeader
-                title="Add the finding context"
-                text="Use the public-facing description of the claim. Sensitive details still belong in private evidence."
+                title="Finding"
+                text="Use the public-facing description of the claim. Sensitive mechanics stay in private evidence."
               />
               <div className="claim-fields claim-fields--compact">
-                <Field label="Finding title" value={draft.findingTitle} onChange={(value) => update({ findingTitle: value })} />
-                <Field label="Vulnerability category" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
+                <Field label="Public title" value={draft.findingTitle} onChange={(value) => update({ findingTitle: value })} />
+                <Field label="Category" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
+                <Field label="Public impact threshold" value={draft.publicClaim.publicThreshold} onChange={(value) => update({ publicClaim: { ...draft.publicClaim, publicThreshold: value } })} />
               </div>
               <Segmented
                 label="Severity"
@@ -466,28 +559,29 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 value={draft.claimedSeverity}
                 onChange={(value) => update({ claimedSeverity: value as ClaimDraft["claimedSeverity"] })}
               />
-              <TextArea label="Short summary" value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
+              <TextArea label="Short public summary" value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
             </section>
           ) : null}
 
-          {step === 3 ? (
+          {step === 2 ? (
             <section className="claim-step">
               <StepHeader
-                title="Add private evidence locally"
-                text="Files and sensitive details remain on this device. ZeroSeal does not publish raw evidence."
+                title="Private evidence"
+                text="Nothing on this step leaves your device."
               />
-              <div className="privacy-callout">
-                <span aria-hidden="true" />
-                <strong>Private evidence is local until you decide otherwise.</strong>
-              </div>
               <div className="claim-fields claim-fields--compact">
-                <TextArea label="Report text" value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
-                <TextArea label="PoC notes" value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
+                <TextArea label="Private report" value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
                 <TextArea label="Reproduction steps" value={draft.privateEvidence.reproductionSteps} onChange={(value) => updatePrivateEvidence("reproductionSteps", value)} />
+              </div>
+              <details className="technical-details technical-details--compact">
+                <summary>Optional private details</summary>
+                <div className="claim-fields claim-fields--compact">
+                  <TextArea label="PoC notes" value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
                 <Field label="Private impact value" value={draft.privateEvidence.privateImpactValues} onChange={(value) => updatePrivateEvidence("privateImpactValues", value)} />
               </div>
+              </details>
               <label className="file-picker">
-                <span>Attach local files</span>
+                <span>Drag files here or choose files</span>
                 <input
                   type="file"
                   multiple
@@ -497,8 +591,18 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                     )
                   }
                 />
-                <strong>{selectedFiles.length ? `${selectedFiles.length} selected` : "No files selected"}</strong>
+                <strong>{selectedFiles.length ? `${selectedFiles.length} local file${selectedFiles.length === 1 ? "" : "s"}` : "No local files added"}</strong>
               </label>
+              {selectedFiles.length ? (
+                <div className="file-chip-row">
+                  {selectedFiles.map((file) => (
+                    <span className="file-chip" key={file}>
+                      {file}
+                      <button type="button" aria-label={`Remove ${file}`} onClick={() => setSelectedFiles((files) => files.filter((item) => item !== file))}>x</button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="claim-step__actions">
                 <button className="btn btn--outline btn--sm" type="button" onClick={clearPrivateEvidence}>
                   Clear private evidence
@@ -507,11 +611,11 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
             </section>
           ) : null}
 
-          {step === 4 ? (
+          {step === 3 ? (
             <section className="claim-step">
               <StepHeader
-                title="Generate the private seal"
-                text="ZeroSeal creates the fingerprint only after you click the button."
+                title="Seal and public claim"
+                text="Generate a local commitment, then approve the exact public fields."
               />
               <div className="seal-panel" data-ready={Boolean(seal)}>
                 <div>
@@ -542,15 +646,6 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 <summary>Technical details</summary>
                 <p>The browser uses canonical claim data, a private evidence digest and secure random salt to create the local seal. The current circuit proves the supported private impact threshold predicate, not arbitrary exploit validity.</p>
               </details>
-            </section>
-          ) : null}
-
-          {step === 5 ? (
-            <section className="claim-step">
-              <StepHeader
-                title="Review the approved public claim"
-                text="This is the privacy boundary. Check it before asking Freighter to record anything."
-              />
               <div className="claim-review claim-review--split">
                 <section>
                   <h3>Private and not published</h3>
@@ -572,47 +667,16 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 </section>
               </div>
               <button className="btn btn--primary btn--sm" type="button" disabled={!seal} onClick={() => void confirmReview()}>
-                Approve public claim
+                {reviewed ? "Public claim approved" : "Approve public claim"}
               </button>
             </section>
           ) : null}
 
-          {step === 6 ? (
+          {step === 4 ? (
             <section className="claim-step">
               <StepHeader
-                title="Review Testnet action"
-                text="Freighter will show the exact Stellar Testnet transaction before submission."
-              />
-              <div className="publish-summary">
-                <div>
-                  <span>Recorded on Testnet</span>
-                  <strong>Researcher fingerprint and registry action</strong>
-                </div>
-                <div>
-                  <span>Never recorded</span>
-                  <strong>Raw evidence, PoC, private files, salts or witness values</strong>
-                </div>
-                <div>
-                  <span>Wallet</span>
-                  <strong>{address ? "Connected" : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
-                </div>
-              </div>
-              <div className="claim-step__actions">
-                <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
-                  Connect Freighter
-                </button>
-                <button className="btn btn--primary btn--sm" type="button" disabled={!reviewed || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
-                  {publishState === "awaiting" ? "Approve in Freighter" : "Review Testnet action"}
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          {step === 7 ? (
-            <section className="claim-step">
-              <StepHeader
-                title="Receipt"
-                text="ZeroSeal shows a public receipt only after a real confirmed Testnet transaction hash is available."
+                title="Sign and receipt"
+                text="Create a real Stellar Testnet receipt only after wallet approval and confirmation."
               />
               {draft.receipt?.transactionHash ? (
                 <div className="claim-receipt">
@@ -630,10 +694,52 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                   </div>
                 </div>
               ) : (
-                <div className="receipt-empty">
-                  <strong>No Testnet receipt yet</strong>
-                  <p>Generate the private seal, approve the public claim and review the Freighter action to create a real receipt.</p>
-                </div>
+                <>
+                  <div className="publish-summary">
+                    <div>
+                      <span>Recorded on Testnet</span>
+                      <strong>Researcher fingerprint and registry action</strong>
+                    </div>
+                    <div>
+                      <span>Never recorded</span>
+                      <strong>Raw evidence, PoC, private files, salts or witness values</strong>
+                    </div>
+                    <div>
+                      <span>Wallet</span>
+                      <strong>{address ? "Connected" : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
+                    </div>
+                  </div>
+                  {mobileSigning ? (
+                    <div className="mobile-handoff">
+                      <strong>Continue signing on desktop</strong>
+                      <p>Freighter extension signing is available on desktop. This continuation contains only the approved public claim and expires in 20 minutes.</p>
+                      <button className="btn btn--primary btn--sm" type="button" onClick={() => void createContinuation()}>
+                        Create desktop continuation
+                      </button>
+                      {continuationToken ? (
+                        <div className="mobile-handoff__link">
+                          <code>{`${typeof window !== "undefined" ? window.location.origin : ""}/create?continue=${continuationToken}`}</code>
+                          <button
+                            className="btn btn--outline btn--sm"
+                            type="button"
+                            onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/create?continue=${continuationToken}`)}
+                          >
+                            Copy desktop continuation link
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="claim-step__actions">
+                      <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
+                        Connect Freighter
+                      </button>
+                      <button className="btn btn--primary btn--sm" type="button" disabled={!reviewed || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
+                        {publishState === "awaiting" ? "Approve in Freighter" : "Review Testnet action"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </section>
           ) : null}
@@ -647,7 +753,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
             <button className="btn btn--outline btn--sm" type="button" onClick={reset}>
               Reset
             </button>
-            {step < 6 ? (
+            {step < 4 ? (
               <button className="btn btn--primary btn--sm" type="button" disabled={!ready} onClick={continueStep}>
                 Continue
               </button>
