@@ -43,3 +43,28 @@ void test("config keeps local API_PORT and WEB_ORIGIN compatibility", () => {
   assert.equal(parsed.PORT, 4001);
   assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, ["http://127.0.0.1:3001"]);
 });
+
+void test("config uses RENDER_EXTERNAL_URL as production API public URL", () => {
+  const parsed = configSchema.parse({
+    ...baseEnv,
+    NODE_ENV: "production",
+    PORT: "10000",
+    RENDER_EXTERNAL_URL: "https://zeroseal-api.onrender.com",
+    CORS_ALLOWED_ORIGINS: "https://zeroseal.vercel.app",
+    RUN_EMBEDDED_WORKER: "true",
+  });
+
+  assert.equal(parsed.API_PUBLIC_URL, "https://zeroseal-api.onrender.com");
+  assert.equal(parsed.RUN_EMBEDDED_WORKER, true);
+  assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, ["https://zeroseal.vercel.app"]);
+});
+
+void test("production config does not invent a local API public URL", () => {
+  const parsed = configSchema.parse({
+    ...baseEnv,
+    NODE_ENV: "production",
+    CORS_ALLOWED_ORIGINS: "https://zeroseal.vercel.app",
+  });
+
+  assert.equal(parsed.API_PUBLIC_URL, undefined);
+});

@@ -1,20 +1,67 @@
+"use client";
+
+import Image from "next/image";
+import { useState } from "react";
+
 const ECOSYSTEMS = [
-  "Immunefi",
-  "Sherlock",
-  "Code4rena",
-  "Cantina",
-  "Hats Finance",
-  "CodeHawks",
+  {
+    name: "Immunefi",
+    logo: "/brands/immunefi.svg",
+  },
+  {
+    name: "Sherlock",
+    logo: null,
+  },
+  {
+    name: "Code4rena",
+    logo: "/brands/code4rena.svg",
+  },
+  {
+    name: "Cantina",
+    logo: "/brands/cantina.svg",
+  },
+  {
+    name: "Hats Finance",
+    logo: null,
+  },
+  {
+    name: "CodeHawks",
+    logo: null,
+  },
 ] as const;
+
+function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!item.logo || failed) {
+    return <span className="credibility-marquee__wordmark">{item.name}</span>;
+  }
+
+  return (
+    <span className="credibility-marquee__logo-wrap">
+      <Image
+        className="credibility-marquee__logo"
+        src={item.logo}
+        alt={item.name}
+        width={180}
+        height={48}
+        loading="lazy"
+        unoptimized
+        onError={() => setFailed(true)}
+      />
+      <span className="credibility-marquee__fallback" aria-hidden="true">
+        {item.name}
+      </span>
+    </span>
+  );
+}
 
 function MarqueeTrack({ hidden = false }: { hidden?: boolean }) {
   return (
     <ul className="credibility-marquee__track" aria-hidden={hidden}>
-      {ECOSYSTEMS.map((name) => (
-        <li key={name}>
-          <span className="credibility-marquee__wordmark" aria-label={name}>
-            {name}
-          </span>
+      {ECOSYSTEMS.map((item) => (
+        <li key={item.name}>
+          <EcosystemLogo item={item} />
         </li>
       ))}
     </ul>
@@ -36,7 +83,8 @@ export function CredibilityMarquee() {
           researchers, audit firms and vulnerability reward programmes.
         </p>
         <p className="credibility-marquee__label">
-          Designed for security disclosure workflows across ecosystems such as
+          Designed to complement workflows across security research ecosystems
+          such as
         </p>
         <div
           className="credibility-marquee__viewport"
@@ -47,9 +95,6 @@ export function CredibilityMarquee() {
             <MarqueeTrack hidden />
           </div>
         </div>
-        <p className="credibility-marquee__notice">
-          Independent project. No affiliation or endorsement is implied.
-        </p>
       </div>
     </section>
   );

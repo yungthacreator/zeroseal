@@ -18,6 +18,7 @@ import { useWallet } from "@/context/wallet-context";
 import {
   attachClaimEvidence,
   createBackendClaim,
+  getApiReadiness,
   getProgrammes,
   recoverResearcherRegistration,
   recordBackendTransaction,
@@ -303,6 +304,8 @@ export function ResearcherRegistration() {
     useState<string>("LOCAL_ONLY");
   const [programmes, setProgrammes] = useState<Array<Record<string, unknown>>>([]);
   const [programmeMessage, setProgrammeMessage] = useState<string | null>(null);
+  const [programmeRetryNonce, setProgrammeRetryNonce] = useState(0);
+  const [programmeCanRetry, setProgrammeCanRetry] = useState(false);
   const [backendMessage, setBackendMessage] = useState<string | null>(null);
   const [submissionState, setSubmissionState] =
     useState<SubmissionState>("idle");
@@ -465,24 +468,56 @@ export function ResearcherRegistration() {
 
   useEffect(() => {
     let cancelled = false;
+    let timer: number | null = null;
+    const delays = [900, 1600, 2800, 4500];
 
-    getProgrammes()
-      .then((items) => {
+    const loadProgrammes = async (attempt = 0) => {
+      try {
+        setProgrammeCanRetry(false);
+        setProgrammeMessage(
+          attempt > 0 ? "Starting ZeroSeal verification service" : null,
+        );
+        await getApiReadiness();
+        const items = await getProgrammes();
         if (!cancelled) {
           setProgrammes(items);
           setProgrammeMessage(null);
         }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setProgrammeMessage("Backend unavailable");
+      } catch (error) {
+        if (cancelled) {
+          return;
         }
-      });
+        const apiError = isApiError(error) ? error : null;
+        if (
+          apiError?.code !== "API_UNCONFIGURED" &&
+          attempt < delays.length
+        ) {
+          setProgrammeMessage("Starting ZeroSeal verification service");
+          timer = window.setTimeout(() => {
+            void loadProgrammes(attempt + 1);
+          }, delays[attempt]);
+          return;
+        }
+        if (!cancelled) {
+          setProgrammeCanRetry(true);
+          setProgrammeMessage(
+            apiError?.code === "API_UNCONFIGURED"
+              ? "Production API is not configured"
+              : "Verification service is not ready",
+          );
+        }
+      }
+    };
+
+    void loadProgrammes();
 
     return () => {
       cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
     };
-  }, []);
+  }, [programmeRetryNonce]);
 
   const attachEvidence = async (payload: EvidenceCommitmentPayload) => {
     setEvidenceCommitment(payload.evidenceCommitment);
@@ -1253,7 +1288,18 @@ export function ResearcherRegistration() {
             </div>
           </dl>
           {programmeMessage ? (
-            <p className="programme-selector__warning">{programmeMessage}</p>
+            <div className="programme-selector__warning">
+              <p>{programmeMessage}</p>
+              {programmeCanRetry ? (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--outline"
+                  onClick={() => setProgrammeRetryNonce((value) => value + 1)}
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </section>
 

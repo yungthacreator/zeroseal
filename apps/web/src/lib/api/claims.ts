@@ -184,6 +184,10 @@ export function getCircuits() {
   return request<Array<Record<string, unknown>>>("/api/v1/circuits");
 }
 
+export function getApiReadiness() {
+  return request<Record<string, unknown>>("/ready");
+}
+
 export function recoverResearcherRegistration(
   address: string,
   researcherCommitment?: string,

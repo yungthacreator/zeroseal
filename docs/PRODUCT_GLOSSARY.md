@@ -54,5 +54,14 @@ Verifier execution that proves the submitted proof is valid for the selected cir
 ## Soroban Verification
 Verification or registry logic executed by configured Soroban contracts on Stellar Testnet.
 
+## Embedded Worker
+The verification and transaction reconciliation queue consumer running inside the API web process. This supports the free Render deployment where a separate worker service is not available.
+
+## Queue Recovery
+Startup and retry logic that reads persisted PostgreSQL verification jobs and transaction records, then requeues only non-terminal work into Redis with deterministic job identifiers.
+
+## Cold Start
+A free hosting state where the API may need time to wake after being idle. The frontend must show this as startup, not as a permanent verification failure.
+
 ## Receipt ID
 The immutable ZeroSeal receipt identifier. It is not a Stellar transaction hash.

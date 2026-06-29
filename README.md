@@ -652,9 +652,23 @@ ZeroSeal never asks mobile users to enter a seed phrase into the website.
 * verification credits are not yet operational;
 * XLM settlement is not yet part of the primary claim flow;
 * additional claim types require purpose-built circuits;
-* the deployed application may require a separately hosted API for persistent backend functionality.
+* the deployed application requires `NEXT_PUBLIC_ZEROSEAL_API_URL` to point at the deployed API;
+* free Render services may cold start after idle time;
+* free Render PostgreSQL has free-plan retention limits.
 
 These limitations are shown openly so the application does not overstate what has been implemented.
+
+## Free Render Deployment
+
+The included Render blueprint is designed for a zero-cost production demo:
+
+* `zeroseal-api`, one free web service;
+* `zeroseal-postgres`, one free PostgreSQL database;
+* `zeroseal-redis`, one free Key Value instance.
+
+The API runs the verification and reconciliation worker in the same web process when `RUN_EMBEDDED_WORKER=true`. PostgreSQL remains the source of truth. Redis is only the queue transport, and queued work is recovered from persisted PostgreSQL records when the API starts or when Redis becomes available again.
+
+See `docs/RENDER_DEPLOYMENT.md` for the exact blueprint and Vercel connection steps.
 
 ## Roadmap
 

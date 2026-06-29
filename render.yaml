@@ -1,17 +1,17 @@
 services:
   - type: keyvalue
     name: zeroseal-redis
-    plan: starter
+    plan: free
     region: oregon
     ipAllowList: []
     maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
+    persistenceMode: off
 
   - type: web
     name: zeroseal-api
     runtime: node
     rootDir: apps/api
-    plan: starter
+    plan: free
     region: oregon
     buildCommand: npm ci && npm run prisma:generate && npm run build
     preDeployCommand: npx prisma migrate deploy
@@ -29,6 +29,8 @@ services:
           property: connectionString
       - key: NODE_ENV
         value: production
+      - key: RUN_EMBEDDED_WORKER
+        value: true
       - key: CORS_ALLOWED_ORIGINS
         value: https://zeroseal.vercel.app
       - key: STELLAR_NETWORK
@@ -54,50 +56,9 @@ services:
       - key: LOG_LEVEL
         value: info
 
-  - type: worker
-    name: zeroseal-worker
-    runtime: node
-    rootDir: apps/api
-    plan: starter
-    region: oregon
-    buildCommand: npm ci && npm run prisma:generate && npm run build
-    startCommand: node dist/worker.js
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: zeroseal-postgres
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: zeroseal-redis
-          property: connectionString
-      - key: NODE_ENV
-        value: production
-      - key: STELLAR_NETWORK
-        value: TESTNET
-      - key: STELLAR_RPC_URL
-        value: https://soroban-testnet.stellar.org
-      - key: STELLAR_HORIZON_URL
-        value: https://horizon-testnet.stellar.org
-      - key: STELLAR_NETWORK_PASSPHRASE
-        value: Test SDF Network ; September 2015
-      - key: REGISTRY_CONTRACT_ID
-        value: CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R
-      - key: VERIFIER_CONTRACT_ID
-        value: CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X
-      - key: EXPLORER_TRANSACTION_BASE_URL
-        value: https://stellar.expert/explorer/testnet/tx
-      - key: EXPLORER_ACCOUNT_BASE_URL
-        value: https://stellar.expert/explorer/testnet/account
-      - key: EXPLORER_CONTRACT_BASE_URL
-        value: https://stellar.expert/explorer/testnet/contract
-      - key: LOG_LEVEL
-        value: info
-
 databases:
   - name: zeroseal-postgres
-    plan: basic-256mb
+    plan: free
     region: oregon
     databaseName: zeroseal
     user: zeroseal

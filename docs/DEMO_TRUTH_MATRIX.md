@@ -3,9 +3,10 @@
 | Visible claim or feature | Classification | Source of truth | Verification note |
 | --- | --- | --- | --- |
 | Live frontend at `https://zeroseal.vercel.app` | Implemented and live | Vercel project | Public frontend loads independently of local services |
-| Production API | Roadmap until deployed | Provider health URL | Do not claim live until `/health` and `/ready` pass on a real public API |
-| Managed PostgreSQL | Roadmap until provisioned | Provider database | Local Docker Postgres is not production |
-| Managed Redis and persistent worker | Roadmap until deployed | Provider worker logs and queue processing | Worker is implemented locally as a separate process |
+| Production API | Roadmap until deployed | Provider health URL | Free Render blueprint is present. Do not claim live until `/health` and `/ready` pass on a real public API |
+| Managed PostgreSQL | Roadmap until provisioned | Provider database | Free Render PostgreSQL is configured in blueprint. Local Docker Postgres is not production |
+| Managed Redis and embedded worker | Implemented locally, roadmap until deployed | API process logs and queue processing | Free deployment runs the worker inside `zeroseal-api` with `RUN_EMBEDDED_WORKER=true` |
+| Redis queue recovery | Implemented locally | PostgreSQL verification jobs and transactions | Redis is transport only. PostgreSQL is source of truth |
 | Demo programme | Implemented locally | `GET /api/v1/programmes` | `ZeroSeal Security Impact Demo` only |
 | Third-party programme integration | Not supported | API programme records | Ecosystem names are references only |
 | Desktop Freighter connection | Implemented locally | Wallet context and browser extension | Tested path is desktop extension signing |

@@ -5,6 +5,9 @@ import express from "express";
 
 import { AppModule } from "./app.module";
 import { loadConfig } from "./config";
+import { PrismaService } from "./prisma.service";
+import { TransactionsService } from "./transactions.service";
+import { startWorkerRuntime } from "./worker-runtime";
 
 async function bootstrap() {
   const config = loadConfig();
@@ -40,6 +43,20 @@ async function bootstrap() {
   SwaggerModule.setup("/api/docs", app, document);
 
   await app.listen(config.PORT, "0.0.0.0");
+
+  const runtime = await startWorkerRuntime({
+    enabled: config.RUN_EMBEDDED_WORKER,
+    redisUrl: config.REDIS_URL,
+    prisma: app.get(PrismaService),
+    transactions: app.get(TransactionsService),
+  });
+
+  const shutdown = async () => {
+    await runtime.close();
+  };
+
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
 }
 
 void bootstrap();

@@ -2,7 +2,7 @@
 
 ## Product
 
-**ZeroSeal — private proof-of-impact and bounty reservation on Stellar.**
+**ZeroSeal - private proof-of-impact and bounty reservation on Stellar.**
 
 ## Core flow
 
@@ -17,22 +17,22 @@ private witness
 
 ## Milestone order
 
-### M0 — proof-verification spike
+### M0 - proof-verification spike
 Real Noir proof accepted by a real Soroban verifier on localnet. Wrong input and tampered proof rejected.
 
-### M1 — domain circuit
+### M1 - domain circuit
 Prove target binding, state binding, non-privileged execution, excess withdrawal, threshold, researcher binding, and nullifier.
 
-### M2 — contracts
+### M2 - contracts
 Demo vault, bounty escrow, impact coordinator, replay protection, atomic state transition.
 
-### M3 — testnet
+### M3 - testnet
 Deploy and complete a real testnet flow.
 
-### M4 — adversarial review
+### M4 - adversarial review
 Independent review and negative tests.
 
-### M5 — GUI
+### M5 - GUI
 Single-screen, black-and-white interface with restrained Stellar-compatible accent.
 
 ## Stop conditions

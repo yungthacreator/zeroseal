@@ -3,6 +3,10 @@ import { z } from "zod";
 const contractId = z.string().regex(/^C[A-Z2-7]{55}$/);
 
 const port = z.coerce.number().int().positive();
+const booleanString = z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((value) => value === true || value === "true");
 
 function splitOrigins(value: string): string[] {
   return value
@@ -20,6 +24,8 @@ export const configSchema = z
     WEB_ORIGIN: z.string().url().optional(),
     CORS_ALLOWED_ORIGINS: z.string().optional(),
     API_PUBLIC_URL: z.string().url().optional(),
+    RENDER_EXTERNAL_URL: z.string().url().optional(),
+    RUN_EMBEDDED_WORKER: booleanString,
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -36,10 +42,17 @@ export const configSchema = z
   })
   .transform((value) => {
     const resolvedPort = value.PORT ?? value.API_PORT ?? 4000;
+    const localOrigins = ["http://127.0.0.1:3001", "http://localhost:3001"];
     const resolvedOrigins =
       value.CORS_ALLOWED_ORIGINS && value.CORS_ALLOWED_ORIGINS.trim().length > 0
         ? splitOrigins(value.CORS_ALLOWED_ORIGINS)
-        : [value.WEB_ORIGIN ?? "http://127.0.0.1:3001"];
+        : value.WEB_ORIGIN
+          ? [value.WEB_ORIGIN]
+          : localOrigins;
+    const apiPublicUrl =
+      value.API_PUBLIC_URL ??
+      value.RENDER_EXTERNAL_URL ??
+      (value.NODE_ENV === "development" ? `http://127.0.0.1:${resolvedPort}` : undefined);
 
     return {
       ...value,
@@ -47,6 +60,7 @@ export const configSchema = z
       API_PORT: resolvedPort,
       WEB_ORIGIN: resolvedOrigins[0],
       CORS_ALLOWED_ORIGINS: resolvedOrigins,
+      API_PUBLIC_URL: apiPublicUrl,
     };
   });
 

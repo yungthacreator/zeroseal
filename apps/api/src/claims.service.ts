@@ -21,6 +21,10 @@ import {
   CreateClaimInput,
 } from "./claims.schemas";
 import { Queue, type ConnectionOptions } from "bullmq";
+import {
+  transactionQueueJobId,
+  verificationQueueJobId,
+} from "./worker-runtime";
 
 @Injectable()
 export class ClaimsService {
@@ -365,7 +369,11 @@ export class ClaimsService {
       });
     });
 
-    await this.verificationQueue.add("verify-claim", { jobId: job.id, claimId }, { jobId: job.id });
+    await this.verificationQueue.add(
+      "verify-claim",
+      { jobId: job.id, claimId },
+      { jobId: verificationQueueJobId(job.id) },
+    );
     return job;
   }
 
@@ -463,7 +471,11 @@ export class ClaimsService {
       return record;
     });
 
-    await this.transactionQueue.add("reconcile-transaction", { transactionId: txRecord.id }, { jobId: txRecord.id });
+    await this.transactionQueue.add(
+      "reconcile-transaction",
+      { transactionId: txRecord.id },
+      { jobId: transactionQueueJobId(txRecord.id) },
+    );
     return txRecord;
   }
 

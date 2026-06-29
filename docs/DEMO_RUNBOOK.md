@@ -12,7 +12,7 @@
 - Testnet account funded.
 - PostgreSQL and Redis running locally, or a verified production API configured in Vercel.
 - API env includes `DATABASE_URL`, `REDIS_URL`, `CORS_ALLOWED_ORIGINS`, Stellar Testnet URLs, registry contract ID and verifier contract ID.
-- Worker is running as a separate process.
+- Worker is running either as the local standalone process or embedded in the API with `RUN_EMBEDDED_WORKER=true`.
 
 ## Exact Demo Fixture
 - Programme: `ZeroSeal Security Impact Demo`.
@@ -50,7 +50,8 @@ ZeroSeal keeps private evidence and witness material away from the public workfl
 
 ## Fallbacks
 - Production API unavailable: say the frontend is live, backend deployment is pending, and run the local API.
-- Worker unavailable: show claim and proof persistence, then state that queue processing is paused.
+- Free API cold start: wait for "Starting ZeroSeal verification service" to finish, then press Retry if it stops retrying.
+- Worker unavailable: show claim and proof persistence, then state that queue processing is paused or waiting for Redis recovery.
 - Testnet delay: keep the submitted transaction pending and use StellarExpert to inspect status later.
 - Wallet missing or mobile device: continue without wallet and show desktop signing instructions.
 - Previously registered researcher: display registry state only; do not call it a complete receipt unless the original transaction hash and ledger are available.
