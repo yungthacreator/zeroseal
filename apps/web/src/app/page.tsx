@@ -9,7 +9,7 @@ import { ProductStatusTerminal } from "@/components/product-status-terminal";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
-import { VerifiedStamp } from "@/components/verified-stamp";
+import { SealCheck, StampSeal } from "@/components/zeroseal-seal";
 import { shortenAddress } from "@/lib/presentation";
 import { explorerContractUrl } from "@/lib/stellar/testnet";
 import {
@@ -30,9 +30,9 @@ const TECH_PIPELINE = [
 ] as const;
 
 const TRUST_POINTS = [
-  "Private by default",
-  "Public claim approved by you",
-  "Testnet receipt after confirmation",
+  "Evidence remains local",
+  "You approve every public field",
+  "Receipt appears after Testnet confirmation",
 ] as const;
 
 const TRUST_CONFLICTS = [
@@ -44,23 +44,23 @@ const TRUST_CONFLICTS = [
 const ZEROSEAL_STAGES = [
   {
     title: "Private evidence",
-    text: "Report and exploit details remain local.",
+    text: "Report detail stays local.",
   },
   {
     title: "Local seal",
-    text: "A cryptographic fingerprint is created in the browser.",
+    text: "A commitment is created in the browser.",
   },
   {
     title: "Approved public claim",
-    text: "Only fields approved by the researcher move forward.",
+    text: "Only selected fields move forward.",
   },
   {
     title: "Threshold proof",
-    text: "The current circuit checks the programme's published threshold.",
+    text: "The current circuit checks the public threshold.",
   },
   {
     title: "Stellar receipt",
-    text: "A confirmed registry action becomes publicly inspectable.",
+    text: "A confirmed Testnet record can be inspected later.",
   },
 ] as const;
 
@@ -100,24 +100,24 @@ export default function Home() {
       <main>
         <section className="hero" id="hero">
           <div className="shell hero__inner">
+            <StampSeal size={104} className="hero__seal" />
             <p className="eyebrow">
               PROVE THE APPROVED CLAIM. KEEP THE EXPLOIT PRIVATE.
             </p>
             <h1 className="display display--hero hero__headline">
-              Prove impact.
+              Keep the exploit
               <br />
-              <em>Keep the exploit private.</em>
+              <em>private.</em>
             </h1>
             <p className="lede hero__lede">
-              ZeroSeal lets security researchers seal private evidence, reveal
-              only an approved claim and record a verifiable Stellar Testnet
-              receipt.
+              Seal sensitive evidence, approve the public claim and create a
+              verifiable Stellar Testnet receipt.
             </p>
             <HeroActions />
             <ul className="hero__trust" aria-label="ZeroSeal trust points">
               {TRUST_POINTS.map((point) => (
                 <li key={point}>
-                  <VerifiedStamp className="verified-stamp" />
+                  <SealCheck size={20} />
                   {point}
                 </li>
               ))}
@@ -140,43 +140,49 @@ export default function Home() {
 
         <CredibilityMarquee />
 
-        <section className="section section--cream story-section trust-gap" id="why-zeroseal">
+        <section className="section section--cream trust-gap" id="why-zeroseal">
           <div className="shell">
             <div className="trust-gap__layout">
-              <header className="section__head">
-                <p className="eyebrow">THE DISCLOSURE TRUST GAP</p>
+              <header className="trust-gap__head">
+                <p className="eyebrow">The disclosure trust gap</p>
                 <h2 className="display display--lg">
-                  Close the trust gap before the exploit moves.
+                  Close the gap before the exploit moves.
                 </h2>
                 <p className="lede">
                   ZeroSeal gives researchers and programmes a shared proof
-                  surface before private exploit detail leaves the reporter.
+                  surface before private exploit detail ever leaves the
+                  reporter.
                 </p>
-              </header>
-              <div className="trust-gap__bridge" aria-label="Disclosure trust gap">
-                <article className="trust-gap__party">
-                  <span>Researcher</span>
-                  <p>
-                    I need to prove that the finding matters without revealing
-                    the complete exploit first.
-                  </p>
-                </article>
-                <article className="trust-gap__seal">
-                  <span>ZeroSeal</span>
-                  <p>Private evidence becomes an approved, verifiable public claim.</p>
-                </article>
-                <article className="trust-gap__party">
-                  <span>Security programme</span>
-                  <p>
-                    I need enough assurance to accept and prioritise a serious claim.
-                  </p>
-                </article>
-                <ul className="trust-gap__conflicts">
+                <ul className="trust-gap__conflicts" aria-label="What the gap causes">
                   {TRUST_CONFLICTS.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
-              </div>
+              </header>
+
+              <ol className="trust-gap__bridge" aria-label="How ZeroSeal bridges the two sides">
+                <li className="trust-gap__party">
+                  <span>Researcher</span>
+                  <p>
+                    I need to prove my finding matters without giving away the
+                    full exploit first.
+                  </p>
+                </li>
+                <li className="trust-gap__seal">
+                  <StampSeal size={56} className="trust-gap__seal-mark" />
+                  <div>
+                    <span>ZeroSeal</span>
+                    <p>An approved public claim, backed by sealed private evidence.</p>
+                  </div>
+                </li>
+                <li className="trust-gap__party">
+                  <span>Security programme</span>
+                  <p>
+                    I need enough evidence to accept, prioritise and pay for a
+                    serious claim.
+                  </p>
+                </li>
+              </ol>
             </div>
           </div>
         </section>
@@ -198,9 +204,7 @@ export default function Home() {
               <div className="zeroseal-stage-flow" aria-label="ZeroSeal verification layer flow">
                 {ZEROSEAL_STAGES.map((stage, index) => (
                   <article className="zeroseal-stage" key={stage.title}>
-                    <span className="zeroseal-stage__number" aria-hidden="true">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
+                    <span className="zeroseal-stage__icon" aria-hidden="true" />
                     <h3>{stage.title}</h3>
                     <p>{stage.text}</p>
                     {index < ZEROSEAL_STAGES.length - 1 ? (

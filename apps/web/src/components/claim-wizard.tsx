@@ -9,12 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/context/wallet-context";
 import {
   createBackendClaim,
-  createBackendContinuation,
-  getApiReadiness,
-  getBackendContinuation,
-  ApiRequestError,
   recordBackendTransaction,
-  type ContinuationPayload,
   type ApiClaim,
 } from "@/lib/api/claims";
 import {
@@ -29,14 +24,12 @@ import {
   type PublicPayload,
 } from "@/lib/claim-flow";
 import { persistReceipt } from "@/lib/receipt-store";
-import { REPORTING_PATHS, findReportingPath } from "@/lib/reporting-paths";
 import { createClaimRegistryClient } from "@/lib/stellar/claim-registry-client";
 import {
   DEFAULT_REGISTRY_CONTRACT_ID,
   DEFAULT_VERIFIER_CONTRACT_ID,
 } from "@/lib/stellar/config";
-import { explorerTransactionUrl, fetchTestnetTransaction } from "@/lib/stellar/testnet";
-import { VerifiedStamp } from "@/components/verified-stamp";
+import { explorerTransactionUrl } from "@/lib/stellar/testnet";
 
 type WizardMode = "create" | "demo";
 type PublishState = "idle" | "preparing" | "awaiting" | "submitting" | "confirmed" | "failed";
@@ -47,6 +40,22 @@ const STEPS = [
   "Private evidence",
   "Seal and public claim",
   "Sign and receipt",
+] as const;
+
+const REPORTING_CONTEXTS = [
+  { label: "Immunefi", category: "Web3 bug bounty", logo: "/brands/immunefi.svg" },
+  { label: "HackerOne", category: "Bug bounty and vulnerability disclosure", logo: "/brands/hackerone.svg" },
+  { label: "Bugcrowd", category: "Bug bounty and vulnerability disclosure" },
+  { label: "Intigriti", category: "Bug bounty and vulnerability disclosure" },
+  { label: "YesWeHack", category: "Bug bounty and vulnerability disclosure" },
+  { label: "HackenProof", category: "Bug bounty and Web3 disclosure" },
+  { label: "Code4rena", category: "Smart-contract audit competition", logo: "/brands/code4rena.svg" },
+  { label: "CodeHawks", category: "Smart-contract audit competition", logo: "/brands/codehawks.svg" },
+  { label: "Cantina", category: "Security review and competition", logo: "/brands/cantina.svg" },
+  { label: "Sherlock", category: "Smart-contract audit competition" },
+  { label: "Hats Finance", category: "Web3 bug bounty" },
+  { label: "Direct to project", category: "Private report to the project security team" },
+  { label: "Other", category: "Custom disclosure route" },
 ] as const;
 
 const TARGET_TYPES = [
@@ -66,39 +75,12 @@ function isMobileViewport(): boolean {
   return window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
 }
 
-function shortHash(value?: string | null): string {
-  if (!value) {
-    return "Not ready";
-  }
-  return `${value.slice(0, 8)}...${value.slice(-8)}`;
-}
-
-function explainPublishError(error: unknown): string {
-  if (error instanceof ApiRequestError) {
-    if (error.code === "API_UNCONFIGURED" || error.code === "API_MISCONFIGURED") {
-      return "ZeroSeal claim service is not configured. No transaction was submitted.";
-    }
-    if (error.code === "API_UNAVAILABLE") {
-      return "ZeroSeal could not reach the claim service. No transaction was submitted.";
-    }
-    if (error.code.includes("DATABASE")) {
-      return "ZeroSeal claim service is reachable, but the database is not ready. No transaction was submitted.";
-    }
-    return `${error.message} No transaction was submitted.`;
-  }
-
-  const message = error instanceof Error ? error.message : "";
-  const normalized = message.toLowerCase();
-  if (normalized.includes("reject") || normalized.includes("declin") || normalized.includes("cancel")) {
-    return "Freighter rejected the request. Nothing was submitted.";
-  }
-  if (normalized.includes("simulate") || normalized.includes("simulation")) {
-    return "The transaction could not be simulated. Nothing was submitted.";
-  }
-  if (message) {
-    return message;
-  }
-  return "The publish flow failed before a confirmed receipt was created.";
+function randomToken(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto?.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function extractTransactionHash(value: unknown): string | null {
@@ -195,39 +177,6 @@ function publicInputRows(seal: NonNullable<ClaimDraft["privateSeal"]>) {
   ];
 }
 
-async function assertBackendReady(): Promise<void> {
-  const readiness = await getApiReadiness();
-  const database =
-    typeof readiness.database === "string"
-      ? readiness.database
-      : readiness.database &&
-          typeof readiness.database === "object" &&
-          "status" in readiness.database
-        ? String((readiness.database as { status?: unknown }).status)
-        : null;
-
-  if (database !== "ready") {
-    throw new ApiRequestError(
-      "DATABASE_UNAVAILABLE",
-      "ZeroSeal claim service is reachable, but the database is not ready.",
-      503,
-      "/ready",
-      readiness,
-    );
-  }
-}
-
-async function waitForSuccessfulTransaction(hash: string) {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const tx = await fetchTestnetTransaction(hash);
-    if (tx.exists && tx.successful) {
-      return tx;
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 1800));
-  }
-  throw new Error("The transaction hash was returned, but Stellar confirmation was not proven yet.");
-}
-
 export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const searchParams = useSearchParams();
   const [draft, setDraft] = useState<ClaimDraft>(() => {
@@ -251,9 +200,6 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const [backendClaim, setBackendClaim] = useState<ApiClaim | null>(null);
   const [mobileSigning, setMobileSigning] = useState(() => isMobileViewport());
   const [continuationToken, setContinuationToken] = useState<string | null>(null);
-  const [continuationLink, setContinuationLink] = useState<string | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [backendReady, setBackendReady] = useState<"unknown" | "ready" | "blocked">("unknown");
   const { address, status, connect } = useWallet();
 
   const seal = draft.privateSeal ?? null;
@@ -267,80 +213,12 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const isTryMode = mode === "demo";
   const pageTitle = isTryMode ? "Try ZeroSeal" : "Create a private claim";
   const currentStep = STEPS[step];
-  const selectedReportingPath = findReportingPath(draft.reportingContext);
-  const connectedWallet = address ? `${address.slice(0, 6)}...${address.slice(-6)}` : null;
 
   useEffect(() => {
     const onResize = () => setMobileSigning(isMobileViewport());
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-
-  useEffect(() => {
-    const token = searchParams.get("continue");
-    if (!token) {
-      return;
-    }
-
-    let cancelled = false;
-
-    getBackendContinuation(token)
-      .then((continuation) => {
-        if (cancelled) {
-          return;
-        }
-
-        const publicClaim = continuation.publicClaim;
-        setDraft((current) => ({
-          ...current,
-          state: "PUBLIC_CLAIM_REVIEWED",
-          reportingContext: publicClaim.reportingContext ?? current.reportingContext,
-          programmeName: publicClaim.programmeName ?? current.programmeName,
-          targetType: publicClaim.targetType ?? current.targetType,
-          targetLocator: publicClaim.targetLocator ?? current.targetLocator,
-          affectedComponent: publicClaim.affectedComponent ?? current.affectedComponent,
-          findingTitle: publicClaim.findingTitle ?? current.findingTitle,
-          bugCategory: publicClaim.bugCategory ?? current.bugCategory,
-          claimedSeverity: (
-            SEVERITIES.includes(publicClaim.claimedSeverity as (typeof SEVERITIES)[number])
-              ? publicClaim.claimedSeverity
-              : current.claimedSeverity
-          ) as ClaimDraft["claimedSeverity"],
-          impactStatement: publicClaim.impactStatement ?? current.impactStatement,
-          publicClaim: {
-            ...current.publicClaim,
-            publicThreshold: publicClaim.publicThreshold ?? current.publicClaim.publicThreshold,
-          },
-          researcherFingerprint: continuation.seal.researcherFingerprint,
-          privateSeal: {
-            ...continuation.seal,
-            saltHex: "",
-            recoveryBundle: {
-              schema: "zeroseal.private-recovery.v1",
-              createdAt: new Date().toISOString(),
-              privateEvidence: createInitialClaimDraft().privateEvidence,
-              saltHex: "",
-              canonicalClaimHash: continuation.seal.canonicalClaimHash,
-              researcherFingerprint: continuation.seal.researcherFingerprint,
-              nullifier: continuation.seal.nullifier,
-            },
-          },
-        }));
-        setPublicPayload(continuation.publicPayload as PublicPayload);
-        setReviewed(true);
-        setStep(4);
-        setMessage("Desktop continuation loaded. It contains only approved public claim fields and seal identifiers.");
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setMessage(explainPublishError(error));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams]);
 
   const ready = useMemo(() => {
     switch (step) {
@@ -464,20 +342,10 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       setMessage("Generate the seal and approve the public claim first.");
       return;
     }
-    const payload: ContinuationPayload = {
+    const token = randomToken();
+    const payload = {
+      expiresAt: new Date(Date.now() + 1000 * 60 * 20).toISOString(),
       publicPayload,
-      publicClaim: {
-        reportingContext: draft.reportingContext,
-        programmeName: draft.programmeName,
-        targetType: draft.targetType,
-        targetLocator: draft.targetLocator,
-        affectedComponent: draft.affectedComponent,
-        findingTitle: draft.findingTitle,
-        bugCategory: draft.bugCategory,
-        claimedSeverity: draft.claimedSeverity,
-        impactStatement: draft.impactStatement,
-        publicThreshold: draft.publicClaim.publicThreshold,
-      },
       seal: {
         claimIdentifier: seal.claimIdentifier,
         researcherFingerprint: seal.researcherFingerprint,
@@ -486,15 +354,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         privateEvidenceDigest: seal.privateEvidenceDigest,
       },
     };
-    try {
-      const continuation = await createBackendContinuation(payload);
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      setContinuationToken(continuation.token);
-      setContinuationLink(`${origin}${continuation.linkPath}`);
-      setMessage("Desktop continuation link created. It contains only approved public claim data and expires in 20 minutes.");
-    } catch (error) {
-      setMessage(explainPublishError(error));
-    }
+    window.sessionStorage.setItem(`zeroseal:continuation:${token}`, JSON.stringify(payload));
+    setContinuationToken(token);
+    setMessage("Desktop continuation link created. It contains only approved public claim data.");
   };
 
   const publish = async () => {
@@ -510,12 +372,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
 
     setPublishState("preparing");
     update({ state: nextClaimState("PUBLIC_CLAIM_REVIEWED", "requestWallet") });
-    setMessage("Checking backend readiness before transaction submission.");
+    setMessage("Preparing the Claim Registry action.");
 
     try {
-      await assertBackendReady();
-      setBackendReady("ready");
-
       const payload = await buildPublicPayloadAsync(draft, seal, {
         researcherPublicKey: address,
       });
@@ -546,56 +405,25 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       const response = await transaction.signAndSend();
       setPublishState("submitting");
       const hash = extractTransactionHash(response);
-      const responseLedger = extractLedger(response);
+      const ledger = extractLedger(response);
 
       if (!hash) {
         setPublishState("failed");
         update({ state: "FAILED" });
-        setMessage("Freighter returned no transaction hash. Nothing was recorded as confirmed.");
+        setMessage("Freighter returned no confirmed transaction hash.");
         return;
       }
 
-      const chain = await waitForSuccessfulTransaction(hash);
-      const ledger = chain.ledger ?? responseLedger;
-
-      try {
-        await recordBackendTransaction(claim.id, {
-          transactionHash: hash,
-          walletAddress: address,
-          network: "TESTNET",
-          contractId: registryContractId,
-          method: "register_researcher",
-          operationType: "researcher_registration",
-          researcherCommitment: seal.researcherFingerprint,
-          idempotencyKey: `register:${hash}`,
-        });
-      } catch (error) {
-        persistReceipt({
-          schemaVersion: 2,
-          network: "TESTNET",
-          action: "register_researcher",
-          status: "confirmed",
-          transactionHash: hash,
-          ledger,
-          account: address,
-          sourceAccount: chain.sourceAccount ?? address,
-          contractId: registryContractId,
-          verifierContractId,
-          contractFunction: "register_researcher",
-          commitment: seal.researcherFingerprint,
-          nullifier: seal.nullifier,
-          receiptId: payload.claimIdentifier,
-          confirmedAt: chain.createdAt,
-          savedAt: new Date().toISOString(),
-        });
-        setDraft((current) => ({
-          ...current,
-          receipt: { transactionHash: hash, ledger },
-        }));
-        setPublishState("failed");
-        setMessage(`Confirmed on Stellar, but backend sync is pending. ${explainPublishError(error)}`);
-        return;
-      }
+      await recordBackendTransaction(claim.id, {
+        transactionHash: hash,
+        walletAddress: address,
+        network: "TESTNET",
+        contractId: registryContractId,
+        method: "register_researcher",
+        operationType: "researcher_registration",
+        researcherCommitment: seal.researcherFingerprint,
+        idempotencyKey: `register:${hash}`,
+      });
 
       persistReceipt({
         schemaVersion: 2,
@@ -605,14 +433,14 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         transactionHash: hash,
         ledger,
         account: address,
-        sourceAccount: chain.sourceAccount ?? address,
+        sourceAccount: address,
         contractId: registryContractId,
         verifierContractId,
         contractFunction: "register_researcher",
         commitment: seal.researcherFingerprint,
         nullifier: seal.nullifier,
         receiptId: payload.claimIdentifier,
-        confirmedAt: chain.createdAt,
+        confirmedAt: null,
         savedAt: new Date().toISOString(),
       });
 
@@ -626,9 +454,8 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       setStep(4);
     } catch (error) {
       setPublishState("failed");
-      setBackendReady(error instanceof ApiRequestError ? "blocked" : backendReady);
       update({ state: "FAILED" });
-      setMessage(explainPublishError(error));
+      setMessage(error instanceof Error ? error.message : "Publish failed.");
     }
   };
 
@@ -636,7 +463,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     <div className="claim-flow claim-flow--try">
       <div className="claim-flow__topbar">
         <Link className="claim-flow__back" href="/">
-          <span aria-hidden="true">{"<-"}</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 5 L8 12 L15 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           Back to ZeroSeal
         </Link>
         <div className="claim-flow__top-actions">
@@ -662,12 +491,6 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       </header>
 
       <div className="claim-flow__shell claim-flow__shell--app">
-        <div className="claim-flow__mobile-progress" aria-label="Claim creation progress">
-          <span>Step {step + 1} of {STEPS.length}</span>
-          <strong>{currentStep}</strong>
-          <i style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
-        </div>
-
         <aside className="claim-flow__progress claim-flow__progress--rail" aria-label="Claim creation progress">
           {STEPS.map((label, index) => {
             const complete = isStepComplete(index, step, draft, reviewed);
@@ -679,13 +502,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 aria-current={step === index ? "step" : undefined}
                 onClick={() => setStep(index)}
               >
-                <span>
-                  {complete ? (
-                    <VerifiedStamp className="verified-stamp verified-stamp--step" />
-                  ) : (
-                    String(index + 1).padStart(2, "0")
-                  )}
-                </span>
+                <span>{complete ? "" : String(index + 1).padStart(2, "0")}</span>
                 {label}
               </button>
             );
@@ -704,40 +521,15 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 title="Report"
                 text="This describes where the report will be handled. ZeroSeal does not submit the private report to the platform."
               />
-              {selectedReportingPath ? (
-                <p className="claim-step__context">
-                  {selectedReportingPath.name}: <em>{selectedReportingPath.shortCategory}</em>
-                </p>
-              ) : null}
-              <div className="platform-grid">
-                {REPORTING_PATHS.map((context) => (
-                  <button
-                    type="button"
-                    aria-label={context.accessibleLabel}
-                    data-selected={draft.reportingContext === context.name}
-                    key={context.id}
-                    onClick={() => update({ reportingContext: context.name })}
-                  >
-                    {context.logo ? (
-                      <Image src={context.logo} alt="" aria-hidden="true" width={96} height={28} />
-                    ) : (
-                      <span className="platform-grid__wordmark" aria-hidden="true">{context.name}</span>
-                    )}
-                    <strong>{context.name}</strong>
-                    <em>{context.shortCategory}</em>
-                    {draft.reportingContext === context.name ? (
-                      <VerifiedStamp className="platform-grid__check" />
-                    ) : (
-                      <span className="platform-grid__check" aria-hidden="true" />
-                    )}
-                  </button>
-                ))}
-              </div>
+              <ReportingPathSelector
+                value={draft.reportingContext}
+                onChange={(value) => update({ reportingContext: value })}
+              />
               <div className="claim-fields claim-fields--compact">
-                <Field label="Programme or project" helper="Example: Example Vault Programme or the protocol name" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} />
-                <Field label="Target name" helper="Example: Vault.sol, withdraw(), payments API or mobile app" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} />
-                <SelectField label="Target type" helper="Example: smart contract, repository, API or web application" value={draft.targetType} options={TARGET_TYPES} onChange={(value) => update({ targetType: value })} />
-                <Field label="Repository or contract address" helper="Example: repository URL or deployed contract address" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} />
+                <Field label="Programme or project" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} hint="Example: Example Vault Programme or the protocol name" />
+                <Field label="Target name" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} hint="Example: Vault.sol, withdraw(), payments API or mobile app" />
+                <SelectField label="Target type" value={draft.targetType} options={TARGET_TYPES} onChange={(value) => update({ targetType: value })} hint="Example: smart contract, repository, API or web application" />
+                <Field label="Repository or contract address" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} hint="Example: repository URL or deployed contract address" />
               </div>
             </section>
           ) : null}
@@ -749,9 +541,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 text="Use the public-facing description of the claim. Sensitive mechanics stay in private evidence."
               />
               <div className="claim-fields claim-fields--compact">
-                <Field label="Public title" helper="Example: Unauthorised withdrawal may exceed the programme threshold" value={draft.findingTitle} onChange={(value) => update({ findingTitle: value })} />
-                <Field label="Category" helper="Example: access control, reentrancy or arithmetic error" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
-                <Field label="Public impact threshold" helper="Example: 50,000 USD" value={draft.publicClaim.publicThreshold} onChange={(value) => update({ publicClaim: { ...draft.publicClaim, publicThreshold: value } })} />
+                <Field label="Public title" value={draft.findingTitle} onChange={(value) => update({ findingTitle: value })} />
+                <Field label="Category" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
+                <Field label="Public impact threshold" value={draft.publicClaim.publicThreshold} onChange={(value) => update({ publicClaim: { ...draft.publicClaim, publicThreshold: value } })} />
               </div>
               <Segmented
                 label="Severity"
@@ -759,7 +551,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 value={draft.claimedSeverity}
                 onChange={(value) => update({ claimedSeverity: value as ClaimDraft["claimedSeverity"] })}
               />
-              <TextArea label="Short public summary" helper="Describe only what the programme may safely review publicly." value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
+              <TextArea label="Short public summary" value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
             </section>
           ) : null}
 
@@ -770,14 +562,14 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 text="Nothing on this step leaves your device."
               />
               <div className="claim-fields claim-fields--compact">
-                <TextArea label="Private report" helper="Add the sensitive vulnerability explanation here." value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
-                <TextArea label="Reproduction steps" helper="Add the private steps required to reproduce the issue." value={draft.privateEvidence.reproductionSteps} onChange={(value) => updatePrivateEvidence("reproductionSteps", value)} />
+                <TextArea label="Private report" value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
+                <TextArea label="Reproduction steps" value={draft.privateEvidence.reproductionSteps} onChange={(value) => updatePrivateEvidence("reproductionSteps", value)} />
               </div>
               <details className="technical-details technical-details--compact">
                 <summary>Optional private details</summary>
                 <div className="claim-fields claim-fields--compact">
-                  <TextArea label="PoC notes" helper="Private notes stay in this browser and are never sent to the API." value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
-                <Field label="Private impact value" helper="Example: 100,000 USD. This value is never published." value={draft.privateEvidence.privateImpactValues} onChange={(value) => updatePrivateEvidence("privateImpactValues", value)} />
+                  <TextArea label="PoC notes" value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
+                <Field label="Private impact value" value={draft.privateEvidence.privateImpactValues} onChange={(value) => updatePrivateEvidence("privateImpactValues", value)} />
               </div>
               </details>
               <label className="file-picker">
@@ -895,76 +687,20 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 </div>
               ) : (
                 <>
-                  {seal ? (
-                    <div className="seal-ready-strip">
-                      <div>
-                        <span>Seal ready</span>
-                        <strong className="mono">{shortHash(seal.researcherFingerprint)}</strong>
-                      </div>
-                      <div>
-                        <span>Created locally</span>
-                        <strong>Private evidence unchanged</strong>
-                      </div>
-                    </div>
-                  ) : null}
                   <div className="publish-summary">
                     <div>
-                      <span>Seal</span>
-                      <strong className="mono">{shortHash(seal?.researcherFingerprint)}</strong>
+                      <span>Recorded on Testnet</span>
+                      <strong>Researcher fingerprint and registry action</strong>
                     </div>
                     <div>
-                      <span>Public claim</span>
-                      <strong>{reviewed ? "Approved" : "Not approved"}</strong>
+                      <span>Never recorded</span>
+                      <strong>Raw evidence, PoC, private files, salts or witness values</strong>
                     </div>
                     <div>
                       <span>Wallet</span>
-                      <strong>{connectedWallet ? `Connected: ${connectedWallet}` : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
-                    </div>
-                    <div>
-                      <span>Network</span>
-                      <strong>Stellar Testnet</strong>
-                    </div>
-                    <div>
-                      <span>Backend</span>
-                      <strong>{backendReady === "ready" ? "Ready" : backendReady === "blocked" ? "Blocked" : "Checked before signing"}</strong>
-                    </div>
-                    <div>
-                      <span>Registry action</span>
-                      <strong>Not submitted</strong>
+                      <strong>{address ? "Connected" : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
                     </div>
                   </div>
-                  <details className="technical-details technical-details--compact">
-                    <summary>View public fields</summary>
-                    <dl className="claim-mini-list">
-                      <div><dt>Reporting path</dt><dd>{draft.reportingContext || "Not set"}</dd></div>
-                      <div><dt>Programme</dt><dd>{draft.programmeName || "Not set"}</dd></div>
-                      <div><dt>Target</dt><dd>{draft.affectedComponent || "Not set"}</dd></div>
-                      <div><dt>Severity</dt><dd>{draft.claimedSeverity || "Not set"}</dd></div>
-                      <div><dt>Public rule</dt><dd>{draft.publicClaim.publicThreshold || "Not set"}</dd></div>
-                    </dl>
-                  </details>
-                  <details className="technical-details technical-details--compact">
-                    <summary>View seal details</summary>
-                    <dl className="claim-mini-list">
-                      <div><dt>Claim identifier</dt><dd>{seal?.claimIdentifier ?? "Not ready"}</dd></div>
-                      <div><dt>Researcher fingerprint</dt><dd className="mono">{seal?.researcherFingerprint ?? "Not ready"}</dd></div>
-                      <div><dt>Nullifier</dt><dd className="mono">{seal?.nullifier ?? "Not ready"}</dd></div>
-                    </dl>
-                  </details>
-                  {reviewOpen ? (
-                    <div className="transaction-review" role="region" aria-label="Transaction review">
-                      <h3>Review transaction</h3>
-                      <dl>
-                        <div><dt>Network</dt><dd>Stellar Testnet</dd></div>
-                        <div><dt>Contract</dt><dd className="mono">{registryContractId}</dd></div>
-                        <div><dt>Method</dt><dd>register_researcher</dd></div>
-                        <div><dt>Wallet</dt><dd>{connectedWallet ?? "Connect Freighter first"}</dd></div>
-                        <div><dt>Seal</dt><dd className="mono">{shortHash(seal?.researcherFingerprint)}</dd></div>
-                        <div><dt>Estimated fee</dt><dd>Shown by Freighter before approval</dd></div>
-                      </dl>
-                      <p>Raw evidence, PoC, private files, salt and witness values are excluded.</p>
-                    </div>
-                  ) : null}
                   {mobileSigning ? (
                     <div className="mobile-handoff">
                       <strong>Continue signing on desktop</strong>
@@ -974,11 +710,11 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                       </button>
                       {continuationToken ? (
                         <div className="mobile-handoff__link">
-                          <code>{continuationLink}</code>
+                          <code>{`${typeof window !== "undefined" ? window.location.origin : ""}/create?continue=${continuationToken}`}</code>
                           <button
                             className="btn btn--outline btn--sm"
                             type="button"
-                            onClick={() => continuationLink ? navigator.clipboard?.writeText(continuationLink) : undefined}
+                            onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/create?continue=${continuationToken}`)}
                           >
                             Copy desktop continuation link
                           </button>
@@ -987,23 +723,11 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                     </div>
                   ) : (
                     <div className="claim-step__actions">
-                      {address ? (
-                        <span className="wallet-connected">Connected: {connectedWallet} - Stellar Testnet</span>
-                      ) : (
-                        <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
-                          Connect Freighter
-                        </button>
-                      )}
-                      <button
-                        className="btn btn--outline btn--sm"
-                        type="button"
-                        disabled={!reviewed}
-                        onClick={() => setReviewOpen(true)}
-                      >
-                        Review transaction
+                      <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
+                        Connect Freighter
                       </button>
-                      <button className="btn btn--primary btn--sm" type="button" disabled={!reviewed || !address || !reviewOpen || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
-                        Approve in Freighter
+                      <button className="btn btn--primary btn--sm" type="button" disabled={!reviewed || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
+                        {publishState === "awaiting" ? "Approve in Freighter" : "Review Testnet action"}
                       </button>
                     </div>
                   )}
@@ -1044,32 +768,30 @@ function StepHeader({ title, text }: { title: string; text: string }) {
 
 function Field({
   label,
-  helper,
   value,
   onChange,
+  hint,
 }: {
   label: string;
-  helper?: string;
   value: string;
   onChange: (value: string) => void;
+  hint?: string;
 }) {
   return (
     <label>
       <span>{label}</span>
       <input value={value} onChange={(event) => onChange(event.target.value)} />
-      {helper ? <em className="field-helper">{helper}</em> : null}
+      {hint ? <em className="field-hint">{hint}</em> : null}
     </label>
   );
 }
 
 function TextArea({
   label,
-  helper,
   value,
   onChange,
 }: {
   label: string;
-  helper?: string;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -1077,23 +799,22 @@ function TextArea({
     <label>
       <span>{label}</span>
       <textarea value={value} onChange={(event) => onChange(event.target.value)} />
-      {helper ? <em className="field-helper">{helper}</em> : null}
     </label>
   );
 }
 
 function SelectField({
   label,
-  helper,
   value,
   options,
   onChange,
+  hint,
 }: {
   label: string;
-  helper?: string;
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
+  hint?: string;
 }) {
   return (
     <label>
@@ -1104,7 +825,7 @@ function SelectField({
           <option key={option} value={option}>{option}</option>
         ))}
       </select>
-      {helper ? <em className="field-helper">{helper}</em> : null}
+      {hint ? <em className="field-hint">{hint}</em> : null}
     </label>
   );
 }
@@ -1129,7 +850,6 @@ function Segmented({
             type="button"
             key={option}
             data-selected={value === option}
-            aria-pressed={value === option}
             onClick={() => onChange(option)}
           >
             {option}
@@ -1137,5 +857,124 @@ function Segmented({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+function PathMark({ logo, label }: { logo?: string; label: string }) {
+  if (logo) {
+    return (
+      <span className="path-select__logo">
+        <Image src={logo} alt="" aria-hidden="true" width={88} height={24} unoptimized />
+      </span>
+    );
+  }
+  return (
+    <span className="path-select__mark" aria-hidden="true">
+      {label.charAt(0)}
+    </span>
+  );
+}
+
+function ReportingPathSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const selected =
+    REPORTING_CONTEXTS.find((context) => context.label === value) ?? null;
+
+  const results = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) {
+      return REPORTING_CONTEXTS;
+    }
+    return REPORTING_CONTEXTS.filter(
+      (context) =>
+        context.label.toLowerCase().includes(term) ||
+        context.category.toLowerCase().includes(term),
+    );
+  }, [query]);
+
+  const choose = (label: string) => {
+    onChange(label);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div className="path-select" data-open={open}>
+      <span className="path-select__label">Reporting path</span>
+      <button
+        type="button"
+        className="path-select__trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {selected ? (
+          <>
+            <PathMark logo={"logo" in selected ? selected.logo : undefined} label={selected.label} />
+            <span className="path-select__trigger-text">
+              <strong>{selected.label}</strong>
+              <small>{selected.category}</small>
+            </span>
+          </>
+        ) : (
+          <span className="path-select__trigger-text">
+            <strong>Select a reporting path</strong>
+            <small>Where the full report will eventually be handled</small>
+          </span>
+        )}
+        <svg className="path-select__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 9 L12 15 L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open ? (
+        <div className="path-select__panel" role="listbox" aria-label="Reporting paths">
+          <input
+            className="path-select__search"
+            type="text"
+            value={query}
+            autoFocus
+            placeholder="Search platforms"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <ul className="path-select__options">
+            {results.length === 0 ? (
+              <li className="path-select__empty">No matching reporting paths.</li>
+            ) : (
+              results.map((context) => (
+                <li key={context.label}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={context.label === value}
+                    data-selected={context.label === value}
+                    onClick={() => choose(context.label)}
+                  >
+                    <PathMark logo={"logo" in context ? context.logo : undefined} label={context.label} />
+                    <span className="path-select__option-text">
+                      <strong>{context.label}</strong>
+                      <small>{context.category}</small>
+                    </span>
+                    {context.label === value ? (
+                      <svg className="path-select__tick" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M5 12.5 L10 17.5 L19 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : null}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
