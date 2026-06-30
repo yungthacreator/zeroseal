@@ -2,25 +2,59 @@
 
 ## Goal
 
-Show that ZeroSeal lets a security researcher create a verifiable public claim without publishing the private exploit.
+Show a real ZeroSeal flow: approved public claim, private evidence kept local, Freighter approval on Stellar Testnet, confirmed receipt, and independent verification.
 
-## Script
+## Timeline
 
-1. Open `https://zeroseal.vercel.app`.
-2. Say: "ZeroSeal proves the approved claim and keeps the exploit private."
-3. Point to the three promises: private by default, public claim approved by you, receipt confirmed on Testnet.
-4. Open **Try a sample**.
-5. Click **Load example** for the prepared **Example Vault Threshold Claim**.
-6. Walk through Report and Finding. Explain that Immunefi is reporting context only and ZeroSeal does not submit the private report there.
-7. Open Private evidence. Point out that report text, reproduction steps, PoC notes, files and private impact value remain local.
-8. Click **Generate private seal**. Say: "This seal is a unique fingerprint of the private evidence. It lets the researcher later show the evidence has not changed."
-9. Click **Approve public claim**. Show the private versus public lists.
-10. On desktop, connect Freighter on Stellar Testnet.
-11. Click **Review Testnet action** and approve only after checking Freighter.
-12. Wait for a real transaction hash.
-13. Open the receipt page and the Stellar explorer link.
-14. Open `/verify`, paste the transaction hash and verify the receipt.
+00:00-00:18
+Open `https://zeroseal.vercel.app`.
+Say: "Security researchers often need to prove a finding matters before it is safe to reveal the complete exploit."
+
+00:18-00:35
+Point to the hero.
+Say: "ZeroSeal proves the approved claim and keeps the exploit private. The receipt exists only after confirmation on Stellar Testnet."
+
+00:35-00:52
+Click **Try ZeroSeal**.
+Click **Load example**.
+Show the prepared Immunefi, Example Vault Programme, ExampleVault.sol, `withdraw()`, Critical claim.
+
+00:52-01:12
+Move through **Report** and **Finding**.
+Say: "This is reporting context only. ZeroSeal does not imply an integration or submit the private report to the platform."
+
+01:12-01:32
+Open **Private evidence**.
+Say: "The private report, reproduction steps, PoC notes, private files, salt and private impact value stay local."
+
+01:32-01:52
+Click **Generate private seal**.
+Say: "The seal is created in the browser. The sample starts unsealed, so this fingerprint appears only after my action."
+
+01:52-02:08
+Click **Approve public claim**.
+Open **View public fields** and **View seal details**.
+Say: "Only the approved public claim and seal identifiers move forward."
+
+02:08-02:30
+On **Sign and receipt**, click **Connect Freighter** if needed.
+Confirm Freighter is on Stellar Testnet.
+Click **Review transaction**.
+Read the contract, method, wallet, seal and raw-evidence exclusion.
+Click **Approve in Freighter** and approve in Freighter.
+
+02:30-02:46
+Wait for a real transaction hash and successful Stellar lookup.
+Open **Open receipt page**.
+Open **Open Stellar explorer**.
+Show the transaction hash and ledger.
+
+02:46-03:00
+Open `/verify`.
+Paste the real transaction hash, claim identifier or receipt identifier.
+Click **Verify receipt**.
+Close with: "Bug bounty platforms can use ZeroSeal as a private verification and public receipt layer before full exploit disclosure."
 
 ## Truth Line
 
-The current circuit proves that a private impact value satisfies the programme's published public threshold. It does not prove every possible exploit.
+The current circuit checks the programme's published threshold claim. It does not prove arbitrary exploit validity, and the demo is not ready to record unless a real transaction hash, SUCCESS status and ledger are shown.

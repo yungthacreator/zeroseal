@@ -43,15 +43,19 @@ const STEPS = [
 ] as const;
 
 const REPORTING_CONTEXTS = [
-  { label: "HackerOne", logo: "/brands/hackerone.svg" },
-  { label: "Immunefi", logo: "/brands/immunefi.svg" },
-  { label: "Code4rena", logo: "/brands/code4rena.svg" },
-  { label: "CodeHawks", logo: "/brands/codehawks.svg" },
-  { label: "Cantina", logo: "/brands/cantina.svg" },
-  { label: "HackenProof" },
-  { label: "Sherlock" },
-  { label: "Direct to project" },
-  { label: "Other" },
+  { label: "Immunefi", category: "Web3 bug bounty", logo: "/brands/immunefi.svg" },
+  { label: "HackerOne", category: "Bug bounty and vulnerability disclosure", logo: "/brands/hackerone.svg" },
+  { label: "Bugcrowd", category: "Bug bounty and vulnerability disclosure" },
+  { label: "Intigriti", category: "Bug bounty and vulnerability disclosure" },
+  { label: "YesWeHack", category: "Bug bounty and vulnerability disclosure" },
+  { label: "HackenProof", category: "Bug bounty and Web3 disclosure" },
+  { label: "Code4rena", category: "Smart-contract audit competition", logo: "/brands/code4rena.svg" },
+  { label: "CodeHawks", category: "Smart-contract audit competition", logo: "/brands/codehawks.svg" },
+  { label: "Cantina", category: "Security review and competition", logo: "/brands/cantina.svg" },
+  { label: "Sherlock", category: "Smart-contract audit competition" },
+  { label: "Hats Finance", category: "Web3 bug bounty" },
+  { label: "Direct to project", category: "Private report to the project security team" },
+  { label: "Other", category: "Custom disclosure route" },
 ] as const;
 
 const TARGET_TYPES = [
@@ -459,7 +463,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     <div className="claim-flow claim-flow--try">
       <div className="claim-flow__topbar">
         <Link className="claim-flow__back" href="/">
-          <span aria-hidden="true">{"<-"}</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 5 L8 12 L15 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           Back to ZeroSeal
         </Link>
         <div className="claim-flow__top-actions">
@@ -515,29 +521,15 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 title="Report"
                 text="This describes where the report will be handled. ZeroSeal does not submit the private report to the platform."
               />
-              <div className="platform-grid">
-                {REPORTING_CONTEXTS.map((context) => (
-                  <button
-                    type="button"
-                    data-selected={draft.reportingContext === context.label}
-                    key={context.label}
-                    onClick={() => update({ reportingContext: context.label })}
-                  >
-                    {"logo" in context ? (
-                      <Image src={context.logo} alt="" aria-hidden="true" width={96} height={28} />
-                    ) : (
-                      <span className="platform-grid__mark" aria-hidden="true" />
-                    )}
-                    <strong>{context.label}</strong>
-                    <span className="platform-grid__check" aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
+              <ReportingPathSelector
+                value={draft.reportingContext}
+                onChange={(value) => update({ reportingContext: value })}
+              />
               <div className="claim-fields claim-fields--compact">
-                <Field label="Programme or project" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} />
-                <Field label="Target name" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} />
-                <SelectField label="Target type" value={draft.targetType} options={TARGET_TYPES} onChange={(value) => update({ targetType: value })} />
-                <Field label="Repository or contract address" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} />
+                <Field label="Programme or project" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} hint="Example: Example Vault Programme or the protocol name" />
+                <Field label="Target name" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} hint="Example: Vault.sol, withdraw(), payments API or mobile app" />
+                <SelectField label="Target type" value={draft.targetType} options={TARGET_TYPES} onChange={(value) => update({ targetType: value })} hint="Example: smart contract, repository, API or web application" />
+                <Field label="Repository or contract address" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} hint="Example: repository URL or deployed contract address" />
               </div>
             </section>
           ) : null}
@@ -778,15 +770,18 @@ function Field({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  hint?: string;
 }) {
   return (
     <label>
       <span>{label}</span>
       <input value={value} onChange={(event) => onChange(event.target.value)} />
+      {hint ? <em className="field-hint">{hint}</em> : null}
     </label>
   );
 }
@@ -813,11 +808,13 @@ function SelectField({
   value,
   options,
   onChange,
+  hint,
 }: {
   label: string;
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
+  hint?: string;
 }) {
   return (
     <label>
@@ -828,6 +825,7 @@ function SelectField({
           <option key={option} value={option}>{option}</option>
         ))}
       </select>
+      {hint ? <em className="field-hint">{hint}</em> : null}
     </label>
   );
 }
@@ -859,5 +857,124 @@ function Segmented({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+function PathMark({ logo, label }: { logo?: string; label: string }) {
+  if (logo) {
+    return (
+      <span className="path-select__logo">
+        <Image src={logo} alt="" aria-hidden="true" width={88} height={24} unoptimized />
+      </span>
+    );
+  }
+  return (
+    <span className="path-select__mark" aria-hidden="true">
+      {label.charAt(0)}
+    </span>
+  );
+}
+
+function ReportingPathSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const selected =
+    REPORTING_CONTEXTS.find((context) => context.label === value) ?? null;
+
+  const results = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) {
+      return REPORTING_CONTEXTS;
+    }
+    return REPORTING_CONTEXTS.filter(
+      (context) =>
+        context.label.toLowerCase().includes(term) ||
+        context.category.toLowerCase().includes(term),
+    );
+  }, [query]);
+
+  const choose = (label: string) => {
+    onChange(label);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div className="path-select" data-open={open}>
+      <span className="path-select__label">Reporting path</span>
+      <button
+        type="button"
+        className="path-select__trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {selected ? (
+          <>
+            <PathMark logo={"logo" in selected ? selected.logo : undefined} label={selected.label} />
+            <span className="path-select__trigger-text">
+              <strong>{selected.label}</strong>
+              <small>{selected.category}</small>
+            </span>
+          </>
+        ) : (
+          <span className="path-select__trigger-text">
+            <strong>Select a reporting path</strong>
+            <small>Where the full report will eventually be handled</small>
+          </span>
+        )}
+        <svg className="path-select__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 9 L12 15 L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open ? (
+        <div className="path-select__panel" role="listbox" aria-label="Reporting paths">
+          <input
+            className="path-select__search"
+            type="text"
+            value={query}
+            autoFocus
+            placeholder="Search platforms"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <ul className="path-select__options">
+            {results.length === 0 ? (
+              <li className="path-select__empty">No matching reporting paths.</li>
+            ) : (
+              results.map((context) => (
+                <li key={context.label}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={context.label === value}
+                    data-selected={context.label === value}
+                    onClick={() => choose(context.label)}
+                  >
+                    <PathMark logo={"logo" in context ? context.logo : undefined} label={context.label} />
+                    <span className="path-select__option-text">
+                      <strong>{context.label}</strong>
+                      <small>{context.category}</small>
+                    </span>
+                    {context.label === value ? (
+                      <svg className="path-select__tick" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M5 12.5 L10 17.5 L19 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : null}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }

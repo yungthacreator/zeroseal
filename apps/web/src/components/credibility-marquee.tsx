@@ -2,54 +2,53 @@
 
 import Image from "next/image";
 
-const ECOSYSTEMS = [
-  {
-    name: "HackerOne",
-    logo: "/brands/hackerone.svg",
-  },
-  {
-    name: "Immunefi",
-    logo: "/brands/immunefi.svg",
-  },
-  {
-    name: "Code4rena",
-    logo: "/brands/code4rena.svg",
-  },
-  {
-    name: "CodeHawks",
-    logo: "/brands/codehawks.svg",
-  },
-  {
-    name: "Cantina",
-    logo: "/brands/cantina.svg",
-  },
-] as const;
+type Platform = { name: string; logo?: string };
 
-function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
+// Brief: logos and platform names only — no descriptions, no cards.
+const PLATFORMS: Platform[] = [
+  { name: "HackerOne", logo: "/brands/hackerone.svg" },
+  { name: "Bugcrowd" },
+  { name: "Intigriti" },
+  { name: "YesWeHack" },
+  { name: "Immunefi", logo: "/brands/immunefi.svg" },
+  { name: "HackenProof" },
+  { name: "Code4rena", logo: "/brands/code4rena.svg" },
+  { name: "CodeHawks", logo: "/brands/codehawks.svg" },
+  { name: "Cantina", logo: "/brands/cantina.svg" },
+  { name: "Sherlock" },
+  { name: "Hats Finance" },
+  { name: "Direct to project" },
+];
+
+function PlatformItem({ item }: { item: Platform }) {
   return (
-    <li className="credibility-marquee__logo-wrap">
-      <Image
-        className="credibility-marquee__logo"
-        src={item.logo}
-        alt={item.name}
-        width={180}
-        height={48}
-        loading="lazy"
-        unoptimized
-      />
+    <li className="zs-marquee__item">
+      {item.logo ? (
+        <Image
+          className="zs-marquee__logo"
+          src={item.logo}
+          alt={item.name}
+          width={150}
+          height={36}
+          loading="lazy"
+          unoptimized
+        />
+      ) : (
+        <span className="zs-marquee__word">{item.name}</span>
+      )}
     </li>
   );
 }
 
-function MarqueeTrack({ hidden = false }: { hidden?: boolean }) {
+function Track({ hidden = false }: { hidden?: boolean }) {
   return (
     <ul
-      className="credibility-marquee__track"
+      className="zs-marquee__track"
       aria-hidden={hidden ? "true" : undefined}
-      aria-label={hidden ? undefined : "Security disclosure ecosystem examples"}
+      aria-label={hidden ? undefined : "Security disclosure platforms"}
     >
-      {ECOSYSTEMS.map((item) => (
-        <EcosystemLogo item={item} key={item.name} />
+      {PLATFORMS.map((item) => (
+        <PlatformItem item={item} key={item.name} />
       ))}
     </ul>
   );
@@ -57,26 +56,23 @@ function MarqueeTrack({ hidden = false }: { hidden?: boolean }) {
 
 export function CredibilityMarquee() {
   return (
-    <section
-      className="credibility-marquee"
-      aria-labelledby="credibility-marquee-title"
-    >
+    <section className="zs-marquee" aria-labelledby="zs-marquee-title">
       <div className="shell">
-        <h2 className="eyebrow" id="credibility-marquee-title">
+        <h2 className="eyebrow" id="zs-marquee-title">
           SECURITY DISCLOSURE ECOSYSTEM
         </h2>
-        <h3 className="display display--md">
+        <h3 className="display display--md zs-marquee__heading">
           Fits the disclosure paths researchers already use.
         </h3>
-        <p className="credibility-marquee__lede">
+        <p className="zs-marquee__lede">
           ZeroSeal adds a private verification and receipt layer before the
           complete report is disclosed.
         </p>
-        <div className="credibility-marquee__viewport">
-          <div className="credibility-marquee__motion">
-            <MarqueeTrack />
-            <MarqueeTrack hidden />
-          </div>
+      </div>
+      <div className="zs-marquee__viewport">
+        <div className="zs-marquee__motion">
+          <Track />
+          <Track hidden />
         </div>
       </div>
     </section>

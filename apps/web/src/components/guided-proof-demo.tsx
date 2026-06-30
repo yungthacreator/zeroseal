@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 
 const SCENES = [
   {
-    title: "Choose the reporting path",
+    title: "Choose reporting path",
     caption:
       "Start by choosing HackerOne, Immunefi, Code4rena, CodeHawks, Cantina, HackenProof, Sherlock or a direct project report.",
     active: ["device"],
   },
   {
-    title: "Add private finding context",
+    title: "Add private evidence",
     caption:
       "Enter the title, severity, category, summary and target while sensitive notes remain local.",
     active: ["device", "zeroseal"],
@@ -22,32 +22,40 @@ const SCENES = [
     active: ["device", "zeroseal"],
   },
   {
-    title: "Review the public claim",
+    title: "Approve public fields",
     caption:
       "The public claim keeps only approved fields: programme context, policy, threshold, fingerprint and nullifier.",
     active: ["zeroseal"],
   },
   {
-    title: "Approve the registry action",
+    title: "Sign on Stellar Testnet",
     caption:
       "Freighter shows the exact Stellar Testnet action before anything is submitted.",
     active: ["zeroseal", "wallet"],
   },
   {
-    title: "Verify the receipt",
+    title: "Inspect and verify receipt",
     caption:
       "A receipt appears only after a real Testnet transaction hash and ledger are available.",
     active: ["wallet", "receipt"],
   },
 ] as const;
 
-const CONTROL_ICONS = {
-  play: ">",
-  pause: "||",
-  previous: "<",
-  next: ">",
-  restart: "R",
-} as const;
+function Icon({ name }: { name: "play" | "pause" | "previous" | "next" | "restart" }) {
+  if (name === "play") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>;
+  }
+  if (name === "pause") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>;
+  }
+  if (name === "previous") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 5.5 9 12l6.5 6.5-1.8 1.8L5.4 12l8.3-8.3z" /></svg>;
+  }
+  if (name === "next") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 18.5 6.5-6.5-6.5-6.5 1.8-1.8 8.3 8.3-8.3 8.3z" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 7.2A8 8 0 1 0 20 12h-2.4a5.6 5.6 0 1 1-1-3.2L14 11.4h7V4.5z" /></svg>;
+}
 
 function SceneArtwork({
   active,
@@ -171,7 +179,7 @@ export function GuidedProofDemo() {
             aria-label="Play walkthrough"
             onClick={() => setRunning(true)}
           >
-            <span aria-hidden="true">{CONTROL_ICONS.play}</span>
+            <Icon name="play" />
           </button>
           <button
             type="button"
@@ -179,7 +187,7 @@ export function GuidedProofDemo() {
             aria-label="Pause walkthrough"
             onClick={() => setRunning(false)}
           >
-            <span aria-hidden="true">{CONTROL_ICONS.pause}</span>
+            <Icon name="pause" />
           </button>
           <button
             type="button"
@@ -187,7 +195,7 @@ export function GuidedProofDemo() {
             aria-label="Previous walkthrough step"
             onClick={() => pauseAndSet(index - 1)}
           >
-            <span aria-hidden="true">{CONTROL_ICONS.previous}</span>
+            <Icon name="previous" />
           </button>
           <button
             type="button"
@@ -195,7 +203,7 @@ export function GuidedProofDemo() {
             aria-label="Next walkthrough step"
             onClick={() => pauseAndSet(index + 1)}
           >
-            <span aria-hidden="true">{CONTROL_ICONS.next}</span>
+            <Icon name="next" />
           </button>
           <button
             type="button"
@@ -206,7 +214,7 @@ export function GuidedProofDemo() {
               setIndex(0);
             }}
           >
-            <span aria-hidden="true">{CONTROL_ICONS.restart}</span>
+            <Icon name="restart" />
           </button>
           <a className="btn btn--outline btn--sm" href="#proof-workspace">
             Workspace

@@ -13,6 +13,7 @@ import { TransactionsService } from "./transactions.service";
 import { ReceiptsService } from "./receipts.service";
 import { stellarPublicKey, transactionHash } from "./validators";
 import { ProgrammesService } from "./programmes.service";
+import { ContinuationsService, continuationSchema } from "./continuations.service";
 
 @ApiTags("claims")
 @Controller("api/v1")
@@ -26,6 +27,8 @@ export class ClaimsController {
     private readonly receipts: ReceiptsService,
     @Inject(ProgrammesService)
     private readonly programmes: ProgrammesService,
+    @Inject(ContinuationsService)
+    private readonly continuations: ContinuationsService,
   ) {}
 
   @Post("claims")
@@ -135,5 +138,15 @@ export class ClaimsController {
   @Get("circuits")
   getCircuits() {
     return this.programmes.listCircuits();
+  }
+
+  @Post("continuations")
+  createContinuation(@Body() body: unknown) {
+    return this.continuations.create(parseOrThrow(continuationSchema, body));
+  }
+
+  @Get("continuations/:token")
+  consumeContinuation(@Param("token") token: string) {
+    return this.continuations.consume(token);
   }
 }

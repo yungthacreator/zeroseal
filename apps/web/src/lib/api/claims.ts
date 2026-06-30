@@ -75,6 +75,19 @@ export type ApiErrorState = {
   message: string;
 };
 
+export class ApiRequestError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status: number | null,
+    public readonly path: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 function localApiBase(): string {
   if (typeof window === "undefined") {
     return "";
@@ -103,10 +116,12 @@ async function request<T>(
   const base = apiBase();
 
   if (!base) {
-    throw {
-      code: "API_UNCONFIGURED",
-      message: "Production API URL is missing",
-    } satisfies ApiErrorState;
+    throw new ApiRequestError(
+      "API_UNCONFIGURED",
+      "Production API URL is missing",
+      null,
+      path,
+    );
   }
 
   if (
@@ -114,10 +129,12 @@ async function request<T>(
     !["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname) &&
     /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/i.test(base)
   ) {
-    throw {
-      code: "API_MISCONFIGURED",
-      message: "Production API cannot point to localhost",
-    } satisfies ApiErrorState;
+    throw new ApiRequestError(
+      "API_MISCONFIGURED",
+      "Production API cannot point to localhost",
+      null,
+      path,
+    );
   }
 
   let response: Response;
@@ -131,10 +148,12 @@ async function request<T>(
       },
     });
   } catch {
-    throw {
-      code: "API_UNAVAILABLE",
-      message: "Backend unavailable",
-    } satisfies ApiErrorState;
+    throw new ApiRequestError(
+      "API_UNAVAILABLE",
+      "ZeroSeal could not reach the claim service. No transaction was submitted.",
+      null,
+      path,
+    );
   }
 
   const payload = (await response.json().catch(() => null)) as unknown;
@@ -149,13 +168,15 @@ async function request<T>(
         ? (payload.error as { code?: unknown; message?: unknown })
         : null;
 
-    throw {
-      code: typeof error?.code === "string" ? error.code : "API_ERROR",
-      message:
-        typeof error?.message === "string"
-          ? error.message
-          : "The backend request failed.",
-    } satisfies ApiErrorState;
+    throw new ApiRequestError(
+      typeof error?.code === "string" ? error.code : "API_ERROR",
+      typeof error?.message === "string"
+        ? error.message
+        : "The backend request failed.",
+      response.status,
+      path,
+      payload,
+    );
   }
 
   return payload as T;
@@ -229,6 +250,34 @@ export function getCircuits() {
 
 export function getApiReadiness() {
   return request<Record<string, unknown>>("/ready");
+}
+
+export type ContinuationPayload = {
+  publicPayload: unknown;
+  publicClaim: Record<string, string | null>;
+  seal: {
+    claimIdentifier: string;
+    researcherFingerprint: string;
+    nullifier: string;
+    canonicalClaimHash: string;
+    privateEvidenceDigest: string;
+  };
+};
+
+export function createBackendContinuation(input: ContinuationPayload) {
+  return request<{ token: string; expiresAt: string; linkPath: string }>(
+    "/api/v1/continuations",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function getBackendContinuation(token: string) {
+  return request<ContinuationPayload & { token: string; expiresAt: string }>(
+    `/api/v1/continuations/${encodeURIComponent(token)}`,
+  );
 }
 
 export function recoverResearcherRegistration(

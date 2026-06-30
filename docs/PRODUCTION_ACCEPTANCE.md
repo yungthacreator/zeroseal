@@ -14,6 +14,8 @@
 - The `/create` route creates a persisted backend claim before signing.
 - The `/receipt/[identifier]` route checks backend receipt or transaction state before falling back to public Stellar lookup.
 - A real Stellar Testnet transaction has been executed and inspected.
+- A receipt is not shown as verified unless the transaction exists and succeeded.
+- Mobile continuation uses `/api/v1/continuations`, not browser-only session storage.
 
 ## Manual Provider Variables
 

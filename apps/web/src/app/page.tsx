@@ -9,6 +9,7 @@ import { ProductStatusTerminal } from "@/components/product-status-terminal";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
+import { SealCheck, StampSeal } from "@/components/zeroseal-seal";
 import { shortenAddress } from "@/lib/presentation";
 import { explorerContractUrl } from "@/lib/stellar/testnet";
 import {
@@ -29,9 +30,9 @@ const TECH_PIPELINE = [
 ] as const;
 
 const TRUST_POINTS = [
-  "Private by default",
-  "Public claim approved by you",
-  "Receipt confirmed on Testnet",
+  "Evidence remains local",
+  "You approve every public field",
+  "Receipt appears after Testnet confirmation",
 ] as const;
 
 const TRUST_CONFLICTS = [
@@ -99,23 +100,26 @@ export default function Home() {
       <main>
         <section className="hero" id="hero">
           <div className="shell hero__inner">
+            <StampSeal size={104} className="hero__seal" />
             <p className="eyebrow">
               PROVE THE APPROVED CLAIM. KEEP THE EXPLOIT PRIVATE.
             </p>
             <h1 className="display display--hero hero__headline">
-              Prove impact.
+              Keep the exploit
               <br />
-              <em>Keep the exploit private.</em>
+              <em>private.</em>
             </h1>
             <p className="lede hero__lede">
-              ZeroSeal lets security researchers seal private evidence, reveal
-              only an approved claim and record a verifiable Stellar Testnet
-              receipt.
+              Seal sensitive evidence, approve the public claim and create a
+              verifiable Stellar Testnet receipt.
             </p>
             <HeroActions />
             <ul className="hero__trust" aria-label="ZeroSeal trust points">
               {TRUST_POINTS.map((point) => (
-                <li key={point}>{point}</li>
+                <li key={point}>
+                  <SealCheck size={20} />
+                  {point}
+                </li>
               ))}
             </ul>
             <div className="tech-pipeline" aria-label="Technical pipeline">
@@ -136,44 +140,49 @@ export default function Home() {
 
         <CredibilityMarquee />
 
-        <section className="section section--cream story-section trust-gap" id="why-zeroseal">
+        <section className="section section--cream trust-gap" id="why-zeroseal">
           <div className="shell">
             <div className="trust-gap__layout">
-              <header className="section__head">
-                <p className="eyebrow">THE DISCLOSURE TRUST GAP</p>
+              <header className="trust-gap__head">
+                <p className="eyebrow">The disclosure trust gap</p>
                 <h2 className="display display--lg">
-                  Close the trust gap before the exploit moves.
+                  Close the gap before the exploit moves.
                 </h2>
                 <p className="lede">
                   ZeroSeal gives researchers and programmes a shared proof
-                  surface before private exploit detail leaves the reporter.
+                  surface before private exploit detail ever leaves the
+                  reporter.
                 </p>
+                <ul className="trust-gap__conflicts" aria-label="What the gap causes">
+                  {TRUST_CONFLICTS.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </header>
-              <div className="trust-gap__bridge" aria-label="Disclosure trust gap">
-                <article className="trust-gap__party">
+
+              <ol className="trust-gap__bridge" aria-label="How ZeroSeal bridges the two sides">
+                <li className="trust-gap__party">
                   <span>Researcher</span>
                   <p>
-                    I need to prove that my finding matters without giving away
-                    the full exploit first.
+                    I need to prove my finding matters without giving away the
+                    full exploit first.
                   </p>
-                </article>
-                <article className="trust-gap__seal">
-                  <span>ZeroSeal</span>
-                  <p>An approved public claim backed by private evidence.</p>
-                </article>
-                <article className="trust-gap__party">
+                </li>
+                <li className="trust-gap__seal">
+                  <StampSeal size={56} className="trust-gap__seal-mark" />
+                  <div>
+                    <span>ZeroSeal</span>
+                    <p>An approved public claim, backed by sealed private evidence.</p>
+                  </div>
+                </li>
+                <li className="trust-gap__party">
                   <span>Security programme</span>
                   <p>
                     I need enough evidence to accept, prioritise and pay for a
                     serious claim.
                   </p>
-                </article>
-                <ul className="trust-gap__conflicts">
-                  {TRUST_CONFLICTS.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
+                </li>
+              </ol>
             </div>
           </div>
         </section>
