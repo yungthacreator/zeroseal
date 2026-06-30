@@ -156,7 +156,8 @@ export class TransactionsService {
           },
         });
 
-        if (txRecord.claim && txRecord.method !== "register_researcher") {
+        if (txRecord.claim) {
+          assertTransition(txRecord.claim.status, ClaimStatus.TRANSACTION_FAILED);
           await prisma.claim.update({
             where: { id: txRecord.claim.id },
             data: { status: ClaimStatus.TRANSACTION_FAILED },
@@ -184,7 +185,7 @@ export class TransactionsService {
         },
       });
 
-      if (txRecord.claim && txRecord.method !== "register_researcher") {
+      if (txRecord.claim) {
         assertTransition(txRecord.claim.status, ClaimStatus.CONFIRMED);
         await prisma.claim.update({
           where: { id: txRecord.claim.id },
@@ -194,7 +195,7 @@ export class TransactionsService {
 
       return updated;
     }).then(async (updated) => {
-      if (updated.claimId && updated.method !== "register_researcher") {
+      if (updated.claimId) {
         try {
           await this.receipts.issueIfReady(updated.claimId);
         } catch (error) {

@@ -462,7 +462,8 @@ export class ClaimsService {
         },
       });
 
-      if (!isRegistrationTransaction && claim.status !== ClaimStatus.SUBMITTED) {
+      if (claim.status !== ClaimStatus.SUBMITTED) {
+        assertTransition(claim.status, ClaimStatus.SUBMITTED);
         await tx.claim.update({
           where: { id: claimId },
           data: { status: ClaimStatus.SUBMITTED },

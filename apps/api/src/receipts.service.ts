@@ -24,6 +24,7 @@ export class ReceiptsService {
         impactPolicy: true,
         walletAccount: true,
         proofArtifacts: { orderBy: { createdAt: "desc" }, take: 1 },
+        publicInputs: { orderBy: { position: "asc" } },
         transactions: {
           where: { status: ChainTransactionStatus.CONFIRMED },
           orderBy: { confirmedAt: "desc" },
@@ -44,14 +45,19 @@ export class ReceiptsService {
 
     const transaction = claim.transactions[0];
     const proof = claim.proofArtifacts[0];
-    if (claim.status !== ClaimStatus.CONFIRMED || !transaction || !proof || !transaction.ledgerNumber || !transaction.confirmedAt) {
+    if (claim.status !== ClaimStatus.CONFIRMED || !transaction || !transaction.ledgerNumber || !transaction.confirmedAt) {
       throw new ApiError("RECEIPT_NOT_READY", "Receipt is pending real transaction confirmation.", 409);
     }
 
+    const isRegistryReceipt = transaction.method === "register_researcher";
     const structural = claim.verificationResults.find(
       (result) => result.status === VerificationResultStatus.PASSED,
     );
-    if (!structural) {
+    if (proof && !structural) {
+      throw new ApiError("VERIFICATION_NOT_READY", "Verification result is not ready.", 409);
+    }
+
+    if (!proof && (!isRegistryReceipt || claim.publicInputs.length === 0)) {
       throw new ApiError("VERIFICATION_NOT_READY", "Verification result is not ready.", 409);
     }
 
@@ -64,6 +70,19 @@ export class ReceiptsService {
     }
 
     const receiptId = `zs_${randomUUID()}`;
+    const publicInputDigest = proof?.publicInputDigest ?? digestJson(
+      claim.publicInputs.map((input) => ({
+        position: input.position,
+        name: input.name,
+        digest: input.digest,
+      })),
+    );
+    const proofArtifactDigest = proof?.artifactDigest ?? digestJson({
+      claimId: claim.id,
+      transactionHash: transaction.transactionHash,
+      publicInputDigest,
+      type: "registry-action-public-inputs",
+    });
     const receiptPayload = {
       receiptId,
       claimId: claim.id,
@@ -75,8 +94,8 @@ export class ReceiptsService {
       researcherCommitment: claim.researcherCommitment,
       evidenceBindingStatus: claim.evidenceBindingStatus,
       nullifier: claim.nullifier,
-      publicInputDigest: proof.publicInputDigest,
-      proofArtifactDigest: proof.artifactDigest,
+      publicInputDigest,
+      proofArtifactDigest,
       transactionHash: transaction.transactionHash,
       ledgerNumber: transaction.ledgerNumber,
       registryContract: claim.impactPolicy.registryContract,
@@ -93,7 +112,13 @@ export class ReceiptsService {
         data: {
           ...receiptPayload,
           evidenceCommitmentId: claim.evidenceCommitmentId,
-          verificationResult: { structural: "PASSED", cryptographic: "PENDING", soroban: "PENDING" },
+          verificationResult: proof
+            ? { structural: "PASSED", cryptographic: "PENDING", soroban: "PENDING" }
+            : {
+                structural: "PUBLIC_INPUTS_RECORDED",
+                cryptographic: "PENDING",
+                soroban: "REGISTRY_ACTION_CONFIRMED",
+              },
           transactionId: transaction.id,
           explorerTransactionUrl: this.stellar.explorerTransactionUrl(transaction.transactionHash),
           explorerAccountUrl: this.stellar.explorerAccountUrl(claim.walletAccount.address),
@@ -131,4 +156,10 @@ export class ReceiptsService {
     }
     return receipt;
   }
+}
+
+function digestJson(value: unknown) {
+  return createHash("sha256")
+    .update(JSON.stringify(value))
+    .digest("hex");
 }

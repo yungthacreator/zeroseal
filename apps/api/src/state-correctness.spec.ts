@@ -170,3 +170,136 @@ void test("receipt issuance requires a confirmed claim transaction with hash and
     /Receipt is pending real transaction confirmation/,
   );
 });
+
+void test("confirmed register_researcher transaction confirms the claim and requests a receipt", async () => {
+  let claimStatusUpdate: string | null = null;
+  let receiptClaimId: string | null = null;
+
+  const prisma = {
+    chainTransaction: {
+      findUnique: () =>
+        Promise.resolve({
+          id: "tx-record",
+          status: "SUBMITTED",
+          transactionHash: TX_HASH,
+          sourceAccount: CURRENT_ACCOUNT,
+          walletAccount: { address: CURRENT_ACCOUNT },
+          claimId: "claim-id",
+          claim: { id: "claim-id", status: "SUBMITTED" },
+          method: "register_researcher",
+        }),
+      update: ({ data }: { data: Partial<ChainTransaction> }) =>
+        Promise.resolve({
+          id: "tx-record",
+          claimId: "claim-id",
+          method: "register_researcher",
+          ...data,
+        }),
+    },
+    claim: {
+      update: ({ data }: { data: { status: string } }) => {
+        claimStatusUpdate = data.status;
+        return Promise.resolve({ id: "claim-id", status: data.status });
+      },
+    },
+    $transaction: async (callback: (client: unknown) => Promise<unknown>) =>
+      callback(prisma),
+  } as unknown as PrismaService;
+
+  const stellar = {
+    fetchTransaction: () =>
+      Promise.resolve({
+        hash: TX_HASH,
+        successful: true,
+        ledger: 3242355,
+        sourceAccount: CURRENT_ACCOUNT,
+        createdAt: new Date("2026-06-30T04:00:00Z"),
+        feeCharged: "100",
+      }),
+    rawDigest: () => "digest",
+  } as unknown as StellarService;
+
+  const receipts = {
+    issueIfReady: (claimId: string) => {
+      receiptClaimId = claimId;
+      return Promise.resolve({ receiptId: "zs_test" });
+    },
+  } as unknown as ReceiptsService;
+
+  const service = new TransactionsService(prisma, stellar, receipts);
+  const updated = await service.reconcile("tx-record");
+
+  assert.equal(updated.status, "CONFIRMED");
+  assert.equal(claimStatusUpdate, "CONFIRMED");
+  assert.equal(receiptClaimId, "claim-id");
+});
+
+void test("receipt issuance can create a registration receipt from confirmed public inputs", async () => {
+  let claimStatusUpdate: string | null = null;
+  const createdReceipts: unknown[] = [];
+
+  const prisma = {
+    claim: {
+      findUnique: () =>
+        Promise.resolve({
+          id: "claim-id",
+          status: "CONFIRMED",
+          circuitId: "security-impact-v1",
+          network: "TESTNET",
+          researcherCommitment: RESEARCHER_COMMITMENT,
+          evidenceBindingStatus: "LOCAL_ONLY",
+          nullifier: "1".repeat(64),
+          evidenceCommitmentId: null,
+          programme: { identifier: "zeroseal-public-demo" },
+          programmeSnapshot: { identifier: "2026-demo" },
+          impactPolicy: {
+            identifier: "security-impact-v1",
+            registryContract: "CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R",
+            verifierContract: "CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X",
+          },
+          walletAccount: { address: CURRENT_ACCOUNT },
+          proofArtifacts: [],
+          publicInputs: [
+            { position: 0, digest: "a".repeat(64), valueHex: "01", name: "impact" },
+          ],
+          transactions: [
+            {
+              id: "tx-record",
+              transactionHash: TX_HASH,
+              ledgerNumber: 3242355,
+              confirmedAt: new Date("2026-06-30T04:00:00Z"),
+              method: "register_researcher",
+            },
+          ],
+          verificationResults: [],
+          receipt: null,
+        }),
+      update: ({ data }: { data: { status: string } }) => {
+        claimStatusUpdate = data.status;
+        return Promise.resolve({ id: "claim-id", status: data.status });
+      },
+    },
+    claimReceipt: {
+      create: ({ data }: { data: unknown }) => {
+        createdReceipts.push(data);
+        return Promise.resolve(data);
+      },
+    },
+    $transaction: async (callback: (client: unknown) => Promise<unknown>) =>
+      callback(prisma),
+  } as unknown as PrismaService;
+
+  const stellar = {
+    explorerTransactionUrl: (hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`,
+    explorerAccountUrl: (account: string) => `https://stellar.expert/explorer/testnet/account/${account}`,
+    explorerContractUrl: (contract: string) =>
+      `https://stellar.expert/explorer/testnet/contract/${contract}`,
+  } as unknown as StellarService;
+
+  const service = new ReceiptsService(prisma, stellar);
+  const receipt = await service.issueIfReady("claim-id");
+
+  assert.equal((receipt as { transactionHash: string }).transactionHash, TX_HASH);
+  assert.equal(claimStatusUpdate, "RECEIPT_ISSUED");
+  assert.equal(createdReceipts.length, 1);
+});

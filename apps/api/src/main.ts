@@ -43,6 +43,7 @@ async function bootstrap() {
   SwaggerModule.setup("/api/docs", app, document);
 
   await app.listen(config.PORT, "0.0.0.0");
+  const keepAlive = setInterval(() => undefined, 60_000);
 
   const runtime = await startWorkerRuntime({
     enabled: config.RUN_EMBEDDED_WORKER,
@@ -52,7 +53,9 @@ async function bootstrap() {
   });
 
   const shutdown = async () => {
+    clearInterval(keepAlive);
     await runtime.close();
+    await app.close();
   };
 
   process.once("SIGINT", () => void shutdown());

@@ -1,69 +1,87 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ApiError, parseOrThrow } from "./common";
-import {
-  ContinuationsService,
-  continuationSchema,
-  type ContinuationInput,
-} from "./continuations.service";
+import type { PrismaService } from "./prisma.service";
+import { parseOrThrow } from "./common";
+import { ContinuationsService, continuationSchema } from "./continuations.service";
 
-const validContinuation: ContinuationInput = {
+const PUBLIC_CONTINUATION = {
   publicPayload: {
-    claimIdentifier: "zs_claim_example",
-    reportingContext: "Immunefi",
-    researcherFingerprint: "aa".repeat(32),
-    nullifier: "bb".repeat(32),
-    network: "TESTNET",
+    programmeIdentifier: "zeroseal-public-demo",
+    policyIdentifier: "security-impact-v1",
   },
   publicClaim: {
-    reportingContext: "Immunefi",
-    programmeName: "Example Vault Programme",
-    targetType: "Smart contract",
-    targetLocator: "ExampleVault.sol",
-    affectedComponent: "withdraw()",
-    findingTitle: "Unauthorised withdrawal may exceed the programme threshold",
+    reportingContext: "HackerOne",
+    programmeName: "ZeroSeal Test Programme",
+    targetType: "Web application",
+    targetLocator: "app.example.test",
+    affectedComponent: "Authentication",
+    findingTitle: "Impact threshold predicate",
     bugCategory: "Access control",
-    claimedSeverity: "Critical",
-    impactStatement: "Public threshold claim only.",
-    publicThreshold: "50000",
+    claimedSeverity: "High",
+    impactStatement: "Approved public impact summary only.",
+    publicThreshold: "high-impact",
   },
   seal: {
-    claimIdentifier: "zs_claim_example",
-    researcherFingerprint: "aa".repeat(32),
-    nullifier: "bb".repeat(32),
-    canonicalClaimHash: "cc".repeat(32),
-    privateEvidenceDigest: "dd".repeat(32),
+    claimIdentifier: "zs_test_claim",
+    researcherFingerprint: "1".repeat(64),
+    nullifier: "2".repeat(64),
+    canonicalClaimHash: "3".repeat(64),
+    privateEvidenceDigest: "4".repeat(64),
   },
 };
 
-void test("continuation tokens are opaque, single use and public only", () => {
-  const service = new ContinuationsService();
-  const created = service.create(validContinuation);
+void test("continuations are persisted and consumed only once without private evidence", async () => {
+  let stored: {
+    tokenHash: string;
+    expiresAt: Date;
+    payload: unknown;
+    consumedAt: Date | null;
+  } | null = null;
 
-  assert.match(created.token, /^[A-Za-z0-9_-]+$/);
-  assert.match(created.linkPath, /^\/create\?continue=/);
+  const prisma = {
+    continuation: {
+      create: ({ data }: { data: typeof stored }) => {
+        stored = data;
+        return Promise.resolve(data);
+      },
+      findUnique: () => Promise.resolve(stored),
+      updateMany: ({ data }: { data: { consumedAt: Date } }) => {
+        stored = stored ? { ...stored, consumedAt: data.consumedAt } : stored;
+        return Promise.resolve({ count: stored ? 1 : 0 });
+      },
+      deleteMany: () => Promise.resolve({ count: 0 }),
+    },
+  } as unknown as PrismaService;
 
-  const consumed = service.consume(created.token);
-  assert.equal(consumed.publicClaim.programmeName, "Example Vault Programme");
-  assert.equal(consumed.seal.researcherFingerprint, "aa".repeat(32));
+  const service = new ContinuationsService(prisma);
+  const created = await service.create(PUBLIC_CONTINUATION);
+  const consumed = await service.consume(created.token);
 
-  assert.throws(
+  assert.equal(consumed.token, created.token);
+  assert.equal(consumed.publicClaim.findingTitle, "Impact threshold predicate");
+  assert.equal(stored?.consumedAt instanceof Date, true);
+
+  const serialized = JSON.stringify(stored?.payload).toLowerCase();
+  assert.equal(serialized.includes("reproductionsteps"), false);
+  assert.equal(serialized.includes("proofofconcept"), false);
+
+  await assert.rejects(
     () => service.consume(created.token),
-    (error) => error instanceof ApiError && error.code === "CONTINUATION_NOT_FOUND",
+    /Continuation link has already been used/,
   );
 });
 
-void test("continuation schema rejects private fields", () => {
+void test("continuation schema rejects private evidence fields", () => {
   assert.throws(
     () =>
       parseOrThrow(continuationSchema, {
-        ...validContinuation,
+        ...PUBLIC_CONTINUATION,
         publicPayload: {
-          ...validContinuation.publicPayload,
-          privateEvidence: "do not send",
+          ...PUBLIC_CONTINUATION.publicPayload,
+          reproductionSteps: "do not send",
         },
       }),
-    /Continuation payload cannot include privateevidence/,
+    /Continuation payload cannot include reproductionsteps/,
   );
 });

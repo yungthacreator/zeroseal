@@ -1,7 +1,9 @@
-import { Injectable } from "@nestjs/common";
-import { randomBytes } from "node:crypto";
+import { Inject, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { ApiError } from "./common";
+import { PrismaService } from "./prisma.service";
 import { hex64 } from "./validators";
 
 const publicClaimSchema = z
@@ -37,12 +39,13 @@ export const continuationSchema = z
   .superRefine((value, context) => {
     const serialized = JSON.stringify(value).toLowerCase();
     for (const forbidden of [
-      "privateevidence",
+      "privatereport",
       "reproductionsteps",
       "proofofconcept",
       "salt",
       "privateimpact",
-      "file",
+      "attachment",
+      "witnessvalue",
     ]) {
       if (serialized.includes(forbidden)) {
         context.addIssue({
@@ -55,27 +58,25 @@ export const continuationSchema = z
 
 export type ContinuationInput = z.infer<typeof continuationSchema>;
 
-type StoredContinuation = ContinuationInput & {
-  token: string;
-  expiresAt: Date;
-  usedAt: Date | null;
-};
-
 @Injectable()
 export class ContinuationsService {
-  private readonly continuations = new Map<string, StoredContinuation>();
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
+  ) {}
 
-  create(input: ContinuationInput) {
-    this.prune();
+  async create(input: ContinuationInput) {
+    await this.prune();
 
     const token = randomBytes(18).toString("base64url");
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
 
-    this.continuations.set(token, {
-      ...input,
-      token,
-      expiresAt,
-      usedAt: null,
+    await this.prisma.continuation.create({
+      data: {
+        tokenHash: hashToken(token),
+        expiresAt,
+        payload: input as Prisma.InputJsonValue,
+      },
     });
 
     return {
@@ -85,40 +86,61 @@ export class ContinuationsService {
     };
   }
 
-  consume(token: string) {
-    this.prune();
+  async consume(token: string) {
+    await this.prune();
 
-    const stored = this.continuations.get(token);
+    const tokenHash = hashToken(token);
+    const stored = await this.prisma.continuation.findUnique({
+      where: { tokenHash },
+    });
     if (!stored) {
       throw new ApiError("CONTINUATION_NOT_FOUND", "Continuation link was not found.", 404);
     }
 
-    if (stored.usedAt) {
+    if (stored.consumedAt) {
       throw new ApiError("CONTINUATION_USED", "Continuation link has already been used.", 409);
     }
 
     if (stored.expiresAt.getTime() <= Date.now()) {
-      this.continuations.delete(token);
       throw new ApiError("CONTINUATION_EXPIRED", "Continuation link has expired.", 410);
     }
 
-    stored.usedAt = new Date();
+    const claimed = await this.prisma.continuation.updateMany({
+      where: {
+        tokenHash,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { consumedAt: new Date() },
+    });
+
+    if (claimed.count !== 1) {
+      throw new ApiError("CONTINUATION_USED", "Continuation link has already been used.", 409);
+    }
+
+    const payload = continuationSchema.parse(stored.payload);
 
     return {
       token,
       expiresAt: stored.expiresAt.toISOString(),
-      publicPayload: stored.publicPayload,
-      publicClaim: stored.publicClaim,
-      seal: stored.seal,
+      publicPayload: payload.publicPayload,
+      publicClaim: payload.publicClaim,
+      seal: payload.seal,
     };
   }
 
   private prune() {
-    const now = Date.now();
-    for (const [token, value] of this.continuations) {
-      if (value.expiresAt.getTime() <= now || value.usedAt) {
-        this.continuations.delete(token);
-      }
-    }
+    return this.prisma.continuation.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lte: new Date() } },
+          { consumedAt: { not: null } },
+        ],
+      },
+    });
   }
+}
+
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
 }
