@@ -2,41 +2,25 @@
 
 import Image from "next/image";
 
-const ECOSYSTEMS = [
-  {
-    name: "HackerOne",
-    logo: "/brands/hackerone.svg",
-  },
-  {
-    name: "Immunefi",
-    logo: "/brands/immunefi.svg",
-  },
-  {
-    name: "Code4rena",
-    logo: "/brands/code4rena.svg",
-  },
-  {
-    name: "CodeHawks",
-    logo: "/brands/codehawks.svg",
-  },
-  {
-    name: "Cantina",
-    logo: "/brands/cantina.svg",
-  },
-] as const;
+import { REPORTING_PATHS, type ReportingPath } from "@/lib/reporting-paths";
 
-function EcosystemLogo({ item }: { item: (typeof ECOSYSTEMS)[number] }) {
+function EcosystemLogo({ item }: { item: ReportingPath }) {
   return (
     <li className="credibility-marquee__logo-wrap">
-      <Image
-        className="credibility-marquee__logo"
-        src={item.logo}
-        alt={item.name}
-        width={180}
-        height={48}
-        loading="lazy"
-        unoptimized
-      />
+      {item.logo ? (
+        <Image
+          className="credibility-marquee__logo"
+          src={item.logo}
+          alt={item.name}
+          width={180}
+          height={48}
+          loading="lazy"
+          unoptimized
+        />
+      ) : (
+        <strong className="credibility-marquee__fallback">{item.name}</strong>
+      )}
+      <em>{item.shortCategory}</em>
     </li>
   );
 }
@@ -48,8 +32,8 @@ function MarqueeTrack({ hidden = false }: { hidden?: boolean }) {
       aria-hidden={hidden ? "true" : undefined}
       aria-label={hidden ? undefined : "Security disclosure ecosystem examples"}
     >
-      {ECOSYSTEMS.map((item) => (
-        <EcosystemLogo item={item} key={item.name} />
+      {REPORTING_PATHS.filter((item) => item.id !== "other").map((item) => (
+        <EcosystemLogo item={item} key={item.id} />
       ))}
     </ul>
   );

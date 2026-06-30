@@ -62,20 +62,25 @@ void test("homepage exposes focused routes and restores a clean workspace previe
 void test("walkthrough controls are compact icons and ecosystem logos move", () => {
   const walkthrough = readWebFile("src/components/guided-proof-demo.tsx");
   const component = readWebFile("src/components/credibility-marquee.tsx");
+  const paths = readWebFile("src/lib/reporting-paths.ts");
   const css = readWebFile("src/app/globals.css");
+  const stamp = readWebFile("src/components/verified-stamp.tsx");
 
   assert.match(walkthrough, /aria-label="Play walkthrough"/);
   assert.match(walkthrough, /aria-label="Pause walkthrough"/);
   assert.match(walkthrough, /guided-demo__control-icon/);
+  assert.match(walkthrough, /<svg viewBox="0 0 24 24"/);
   assert.doesNotMatch(walkthrough, />Start</);
   assert.doesNotMatch(walkthrough, />Previous</);
-  assert.match(component, /ECOSYSTEMS = \[/);
   assert.match(component, /MarqueeTrack/);
   assert.match(component, /credibility-marquee__motion/);
   assert.match(css, /@keyframes\s+ecosystemScroll/);
-  assert.match(component, /hackerone\.svg/);
-  assert.doesNotMatch(component, /hackenproof/i);
-  assert.match(component, /cantina\.svg/);
+  assert.match(paths, /hackerone\.svg/);
+  assert.match(component, /REPORTING_PATHS/);
+  assert.match(component, /shortCategory/);
+  assert.match(paths, /cantina\.svg/);
+  assert.match(stamp, /<path/);
+  assert.doesNotMatch(stamp, /linear-gradient|rotate\(45deg\)|rotate\(-45deg\)/);
 });
 
 void test("Try ZeroSeal copy avoids preloaded or toy-like language", () => {
@@ -102,6 +107,8 @@ void test("Try ZeroSeal copy avoids preloaded or toy-like language", () => {
 
 void test("claim creator is a five-step product flow with mobile continuation", () => {
   const wizard = readWebFile("src/components/claim-wizard.tsx");
+  const apiClient = readWebFile("src/lib/api/claims.ts");
+  const controller = readFileSync(join(root, "api", "src/claims.controller.ts"), "utf8");
 
   assert.match(wizard, /"Report"/);
   assert.match(wizard, /"Finding"/);
@@ -111,8 +118,42 @@ void test("claim creator is a five-step product flow with mobile continuation", 
   assert.doesNotMatch(wizard, /"Testnet action"/);
   assert.match(wizard, /Continue signing on desktop/);
   assert.match(wizard, /Copy desktop continuation link/);
+  assert.match(wizard, /createBackendContinuation/);
+  assert.match(wizard, /getBackendContinuation/);
+  assert.doesNotMatch(wizard, /sessionStorage/);
   assert.match(wizard, /createBackendClaim/);
   assert.match(wizard, /recordBackendTransaction/);
+  assert.match(apiClient, /class ApiRequestError extends Error/);
+  assert.match(controller, /continuations/);
+});
+
+void test("shared reporting paths cover all required options", () => {
+  const paths = readWebFile("src/lib/reporting-paths.ts");
+  const workspace = readWebFile("src/components/compact-claim-workspace.tsx");
+  const wizard = readWebFile("src/components/claim-wizard.tsx");
+
+  for (const name of [
+    "HackerOne",
+    "Bugcrowd",
+    "Intigriti",
+    "YesWeHack",
+    "Immunefi",
+    "HackenProof",
+    "Code4rena",
+    "CodeHawks",
+    "Cantina",
+    "Sherlock",
+    "Hats Finance",
+    "Direct to project",
+    "Other",
+  ]) {
+    assert.match(paths, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.match(workspace, /REPORTING_PATHS/);
+  assert.match(wizard, /REPORTING_PATHS/);
+  assert.match(workspace, /"Low", "Medium", "High", "Critical"/);
+  assert.match(workspace, /aria-pressed/);
 });
 
 void test("frontend API client rejects localhost production configuration", () => {

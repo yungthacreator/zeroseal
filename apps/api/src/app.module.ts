@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 
 import { ClaimsController } from "./claims.controller";
 import { ClaimsService } from "./claims.service";
+import { ContinuationsService } from "./continuations.service";
 import { RequestIdMiddleware, SafeExceptionFilter } from "./common";
 import { loadConfig } from "./config";
 import { HealthController } from "./health.controller";
@@ -34,6 +35,7 @@ import { TransactionsService } from "./transactions.service";
     ProgrammesService,
     ProofService,
     ClaimsService,
+    ContinuationsService,
     TransactionsService,
     ReceiptsService,
     StellarService,

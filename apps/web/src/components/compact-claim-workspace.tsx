@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-const REPORTING_PATHS = ["Immunefi", "HackerOne", "Code4rena", "Direct to project"] as const;
-const SEVERITIES = ["Medium", "High", "Critical"] as const;
+import { REPORTING_PATHS } from "@/lib/reporting-paths";
+
+const SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
 
 export function CompactClaimWorkspace() {
-  const [path, setPath] = useState<(typeof REPORTING_PATHS)[number]>("Immunefi");
+  const [path, setPath] = useState("Immunefi");
   const [severity, setSeverity] = useState<(typeof SEVERITIES)[number]>("Critical");
 
   const createUrl = useMemo(() => {
@@ -34,7 +35,7 @@ export function CompactClaimWorkspace() {
             <span>Reporting path</span>
             <select value={path} onChange={(event) => setPath(event.target.value as typeof path)}>
               {REPORTING_PATHS.map((option) => (
-                <option key={option} value={option}>{option}</option>
+                <option key={option.id} value={option.name}>{option.name}</option>
               ))}
             </select>
           </label>
@@ -46,6 +47,7 @@ export function CompactClaimWorkspace() {
                 key={option}
                 type="button"
                 data-selected={severity === option}
+                aria-pressed={severity === option}
                 onClick={() => setSeverity(option)}
               >
                 {option}

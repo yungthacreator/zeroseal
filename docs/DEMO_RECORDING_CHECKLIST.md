@@ -10,11 +10,14 @@
 - Prepared sample works.
 - No console errors.
 - Real transaction confirmation works.
+- Transaction hash is checked for successful Stellar confirmation before it is called confirmed.
 - Stellar explorer link works.
 - Verify route works.
+- `/receipt/[transactionHash]` stays accessible after reload.
 - Mobile layout checked.
 - Desktop layout checked.
 - Browser notifications hidden.
 - Private tabs hidden.
 - Password managers and wallet seed material hidden.
 - Recording starts on the product homepage.
+- Do not record until a real hash, SUCCESS state and ledger number are available.

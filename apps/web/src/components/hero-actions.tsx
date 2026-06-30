@@ -6,7 +6,7 @@ export function HeroActions() {
           Create a private claim
         </a>
         <a className="btn btn--outline" href="/demo">
-          Try a sample
+          Try ZeroSeal
         </a>
         <a className="btn btn--outline" href="/verify">
           Verify a receipt

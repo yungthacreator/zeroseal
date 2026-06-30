@@ -9,6 +9,7 @@ import { ProductStatusTerminal } from "@/components/product-status-terminal";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
+import { VerifiedStamp } from "@/components/verified-stamp";
 import { shortenAddress } from "@/lib/presentation";
 import { explorerContractUrl } from "@/lib/stellar/testnet";
 import {
@@ -31,7 +32,7 @@ const TECH_PIPELINE = [
 const TRUST_POINTS = [
   "Private by default",
   "Public claim approved by you",
-  "Receipt confirmed on Testnet",
+  "Testnet receipt after confirmation",
 ] as const;
 
 const TRUST_CONFLICTS = [
@@ -43,23 +44,23 @@ const TRUST_CONFLICTS = [
 const ZEROSEAL_STAGES = [
   {
     title: "Private evidence",
-    text: "Report detail stays local.",
+    text: "Report and exploit details remain local.",
   },
   {
     title: "Local seal",
-    text: "A commitment is created in the browser.",
+    text: "A cryptographic fingerprint is created in the browser.",
   },
   {
     title: "Approved public claim",
-    text: "Only selected fields move forward.",
+    text: "Only fields approved by the researcher move forward.",
   },
   {
     title: "Threshold proof",
-    text: "The current circuit checks the public threshold.",
+    text: "The current circuit checks the programme's published threshold.",
   },
   {
     title: "Stellar receipt",
-    text: "A confirmed Testnet record can be inspected later.",
+    text: "A confirmed registry action becomes publicly inspectable.",
   },
 ] as const;
 
@@ -115,7 +116,10 @@ export default function Home() {
             <HeroActions />
             <ul className="hero__trust" aria-label="ZeroSeal trust points">
               {TRUST_POINTS.map((point) => (
-                <li key={point}>{point}</li>
+                <li key={point}>
+                  <VerifiedStamp className="verified-stamp" />
+                  {point}
+                </li>
               ))}
             </ul>
             <div className="tech-pipeline" aria-label="Technical pipeline">
@@ -153,19 +157,18 @@ export default function Home() {
                 <article className="trust-gap__party">
                   <span>Researcher</span>
                   <p>
-                    I need to prove that my finding matters without giving away
-                    the full exploit first.
+                    I need to prove that the finding matters without revealing
+                    the complete exploit first.
                   </p>
                 </article>
                 <article className="trust-gap__seal">
                   <span>ZeroSeal</span>
-                  <p>An approved public claim backed by private evidence.</p>
+                  <p>Private evidence becomes an approved, verifiable public claim.</p>
                 </article>
                 <article className="trust-gap__party">
                   <span>Security programme</span>
                   <p>
-                    I need enough evidence to accept, prioritise and pay for a
-                    serious claim.
+                    I need enough assurance to accept and prioritise a serious claim.
                   </p>
                 </article>
                 <ul className="trust-gap__conflicts">
@@ -195,7 +198,9 @@ export default function Home() {
               <div className="zeroseal-stage-flow" aria-label="ZeroSeal verification layer flow">
                 {ZEROSEAL_STAGES.map((stage, index) => (
                   <article className="zeroseal-stage" key={stage.title}>
-                    <span className="zeroseal-stage__icon" aria-hidden="true" />
+                    <span className="zeroseal-stage__number" aria-hidden="true">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
                     <h3>{stage.title}</h3>
                     <p>{stage.text}</p>
                     {index < ZEROSEAL_STAGES.length - 1 ? (
