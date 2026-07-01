@@ -13,7 +13,7 @@ const LINES = [
   "claim.registry               READY",
   "transaction.reconciliation   READY",
   "explorer.receipts            READY",
-  "mobile.wallet.handoff        NOT_CONFIGURED",
+  "mobile.desktop.continuation  READY",
   "xlm.verification.credits     PARTIAL",
 ] as const;
 

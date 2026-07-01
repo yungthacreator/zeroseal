@@ -14,6 +14,7 @@ import { ReceiptsService } from "./receipts.service";
 import { stellarPublicKey, transactionHash } from "./validators";
 import { ProgrammesService } from "./programmes.service";
 import { ContinuationsService, continuationSchema } from "./continuations.service";
+import { VerificationService } from "./verification.service";
 
 @ApiTags("claims")
 @Controller("api/v1")
@@ -29,6 +30,8 @@ export class ClaimsController {
     private readonly programmes: ProgrammesService,
     @Inject(ContinuationsService)
     private readonly continuations: ContinuationsService,
+    @Inject(VerificationService)
+    private readonly verification: VerificationService,
   ) {}
 
   @Post("claims")
@@ -110,9 +113,24 @@ export class ClaimsController {
     return this.transactions.getTransaction(transactionHash.parse(hash));
   }
 
-  @Get("receipts/:receiptId")
-  getReceipt(@Param("receiptId") receiptId: string) {
-    return this.receipts.getByReceiptId(receiptId);
+  @Post("transactions/:transactionHash/reconcile")
+  reconcileTransaction(@Param("transactionHash") hash: string) {
+    return this.transactions.reconcileSubmitClaimHash(transactionHash.parse(hash));
+  }
+
+  @Get("receipts")
+  getPublicReceipts() {
+    return this.receipts.listPublicReceipts();
+  }
+
+  @Get("receipts/:identifier")
+  getReceipt(@Param("identifier") identifier: string) {
+    return this.receipts.getByIdentifier(identifier);
+  }
+
+  @Get("verify/:identifier")
+  verifyIdentifier(@Param("identifier") identifier: string) {
+    return this.verification.verify(identifier);
   }
 
   @Get("programmes")

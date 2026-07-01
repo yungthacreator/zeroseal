@@ -14,6 +14,8 @@ export function WalletAction() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const connecting =
     status === "detecting" || status === "requesting_access";
+  const statusMessage = walletStatusMessage(status, address, error);
+  const buttonLabel = walletButtonLabel(status);
 
   useEffect(() => {
     if (!open) {
@@ -54,7 +56,7 @@ export function WalletAction() {
           onClick={() => setOpen((value) => !value)}
         >
           <span className="wallet-pill__dot" aria-hidden="true" />
-          <span className="wallet-pill__addr">{shortenAddress(address)}</span>
+          <span className="wallet-pill__addr">Connected: {shortenAddress(address)}</span>
           <span className="wallet-pill__net">{networkLabel}</span>
           <svg
             className="wallet-pill__chev"
@@ -108,39 +110,96 @@ export function WalletAction() {
         onClick={() => void connect()}
         disabled={connecting}
       >
-        {connecting ? "Connecting..." : "Connect Freighter"}
+        {buttonLabel}
       </button>
-      {status === "unavailable" ||
-      status === "wrong_network" ||
-      status === "rejected" ||
-      status === "error" ? (
+      {statusMessage ? (
         <div className="wallet-install" role="status" aria-live="polite">
-          <strong>
-            {status === "unavailable"
-              ? "Freighter is required"
-              : "Wallet connection"}
-          </strong>
-          <p>
-            {error === "Wallet connection was cancelled." ||
-            error === "Switch Freighter to Stellar Testnet to continue."
-              ? error
-              : "Freighter authorises ZeroSeal transactions from your browser. Your secret key never leaves the wallet."}
-          </p>
-          <div>
-            {status === "unavailable" ? (
-              <a href={FREIGHTER_URL} target="_blank" rel="noreferrer">
-                Install official Freighter
-              </a>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void connect()}
-            >
-              Retry connection
-            </button>
-          </div>
+          <strong>{walletStatusTitle(status)}</strong>
+          <p>{statusMessage}</p>
+          {!connecting ? (
+            <div>
+              {status === "unavailable" ? (
+                <a href={FREIGHTER_URL} target="_blank" rel="noreferrer">
+                  Install official Freighter
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void connect()}
+              >
+                Retry connection
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
+}
+
+function walletButtonLabel(status: string): string {
+  if (status === "detecting") {
+    return "Connecting...";
+  }
+  if (status === "requesting_access") {
+    return "Waiting for Freighter approval...";
+  }
+  return "Connect Freighter";
+}
+
+function walletStatusTitle(status: string): string {
+  if (status === "detecting") {
+    return "Connecting...";
+  }
+  if (status === "requesting_access") {
+    return "Waiting for Freighter approval...";
+  }
+  if (status === "unavailable") {
+    return "Freighter extension not detected";
+  }
+  if (status === "rejected") {
+    return "Connection rejected";
+  }
+  if (status === "locked") {
+    return "Freighter is locked";
+  }
+  if (status === "wrong_network") {
+    return "Switch Freighter to Stellar Testnet";
+  }
+  if (status === "error") {
+    return "Connection failed";
+  }
+  return "Wallet connection";
+}
+
+function walletStatusMessage(
+  status: string,
+  address: string | null,
+  error: string | null,
+): string | null {
+  if (status === "detecting") {
+    return "Connecting...";
+  }
+  if (status === "requesting_access") {
+    return "Waiting for Freighter approval...";
+  }
+  if (address) {
+    return `Connected: ${shortenAddress(address)}`;
+  }
+  if (status === "unavailable") {
+    return "Freighter extension not detected";
+  }
+  if (status === "rejected") {
+    return "Connection rejected";
+  }
+  if (status === "locked") {
+    return "Freighter is locked";
+  }
+  if (status === "wrong_network") {
+    return "Switch Freighter to Stellar Testnet";
+  }
+  if (status === "error") {
+    return `Connection failed: ${error ?? "The wallet request could not be completed."}`;
+  }
+  return null;
 }

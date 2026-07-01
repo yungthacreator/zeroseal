@@ -13,7 +13,7 @@ const config: ApiConfig = {
   STELLAR_RPC_URL: "https://soroban-testnet.stellar.org",
   STELLAR_HORIZON_URL: "https://horizon-testnet.stellar.org",
   STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
-  REGISTRY_CONTRACT_ID: "CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R",
+  REGISTRY_CONTRACT_ID: "CD6MKUVXB7ZTZQCGNMBVHMU4PGT2SEKS6Z5LF53HXDOAVCO3LGKGQ3JU",
   VERIFIER_CONTRACT_ID: "CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X",
   EXPLORER_TRANSACTION_BASE_URL:
     "https://stellar.expert/explorer/testnet/tx",
@@ -44,7 +44,7 @@ void test("StellarService builds network-aware Explorer links", () => {
   );
 });
 
-void test("StellarService recovers a matching researcher registration transaction", async () => {
+void test("StellarService recovers a matching submit_claim transaction", async () => {
   const originalFetch = global.fetch;
   const txHash =
     "200414937c44753e24c5d79450ad6eb57e267940def01eab6105246ab39f970b";
@@ -52,6 +52,8 @@ void test("StellarService recovers a matching researcher registration transactio
     "GBYWCY5VVCF4ZU3LG4OGOGB6OB6RVAXOA5RTW3BAFJO7MQKWWM7M3EHS";
   const commitment =
     "04365013fb23d445d933eb47b2491088199eb4a60712bb1673a9d8ee448751d0";
+  const claimCommitment = "11".repeat(32);
+  const nullifier = "22".repeat(32);
 
   global.fetch = (async (url: string | URL | Request) => {
     const href = String(url);
@@ -67,11 +69,11 @@ void test("StellarService recovers a matching researcher registration transactio
                   {
                     type: "Address",
                     value:
-                      "AAAAEgAAAAFVDeZ0Q6C3wXnsaK1v7/AMBPFmdBLQ6NVJ4lq1RGlRTw==",
+                      "AAAAEgAAAAH8xVK3D/M8wEZrA1OynHmnqRFS9nqy92e43AqJ21mUaA==",
                   },
                   {
                     type: "Sym",
-                    value: "AAAADwAAABNyZWdpc3Rlcl9yZXNlYXJjaGVyAA==",
+                    value: "AAAADwAAAAxzdWJtaXRfY2xhaW0=",
                   },
                   {
                     type: "Address",
@@ -81,6 +83,14 @@ void test("StellarService recovers a matching researcher registration transactio
                   {
                     type: "Bytes",
                     value: "AAAADQAAACAENlAT+yPURdkz60eySRCIGZ60pgcSuxZzqdjuRIdR0A==",
+                  },
+                  {
+                    type: "Bytes",
+                    value: "AAAADQAAACAREREREREREREREREREREREREREREREREREREREREREQ==",
+                  },
+                  {
+                    type: "Bytes",
+                    value: "AAAADQAAACAiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIg==",
                   },
                 ],
               },
@@ -111,14 +121,18 @@ void test("StellarService recovers a matching researcher registration transactio
   }) as typeof fetch;
 
   try {
-    const recovered = await new StellarService(config).recoverResearcherRegistration(
+    const recovered = await new StellarService(config).recoverSubmitClaim(
       account,
       commitment,
+      claimCommitment,
+      nullifier,
     );
     assert.equal(recovered?.hash, txHash);
     assert.equal(recovered?.ledger, 3242354);
     assert.equal(recovered?.researcherCommitment, commitment);
-    assert.equal(recovered?.method, "register_researcher");
+    assert.equal(recovered?.claimCommitment, claimCommitment);
+    assert.equal(recovered?.nullifier, nullifier);
+    assert.equal(recovered?.method, "submit_claim");
   } finally {
     global.fetch = originalFetch;
   }

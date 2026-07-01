@@ -1,99 +1,83 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-const NOW = [
-  "Noir Security Impact circuit",
-  "UltraHonk proof generation",
-  "Pedersen commitment binding",
-  "Soroban verifier",
-  "Claim Registry",
-  "replay protection",
-  "Stellar Testnet deployment",
-  "wallet-signed registration",
+const ROADMAP_ITEMS = [
+  {
+    title: "Confidential Bounty Escrow",
+    text: "Planned escrow rails for reserving and releasing security rewards after agreed verification and disclosure conditions are met.",
+  },
+  {
+    title: "Confidential Reward Tokens",
+    text: "Planned confidential-token settlement for bounty rewards where commercially sensitive amounts and payment conditions require stronger privacy.",
+  },
+  {
+    title: "Programme API and SDK",
+    text: "Planned tools for bug bounty programmes, audit teams, protocols and security platforms to issue, verify and manage ZeroSeal receipts inside their own workflows.",
+  },
+  {
+    title: "Duplicate Claim Coordination",
+    text: "Planned programme tooling for comparing authorised claim commitments and handling duplicate disputes without exposing private exploit evidence.",
+  },
 ] as const;
 
-const NEXT = [
-  "wallet-signed claim submission",
-  "public receipt explorer",
-  "paid proof verification",
-  "mobile signing",
-  "programme dashboards",
-  "verification API",
-] as const;
-
-function useRoadmapIndex(length: number, offset: number, paused: boolean) {
-  const [index, setIndex] = useState(0);
+export function RoadmapColumns() {
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [revealed, setRevealed] = useState(false);
 
   useEffect(() => {
+    const node = stageRef.current;
+    if (!node) {
+      return;
+    }
+
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    if (reducedMotion || paused) {
-      return;
+    if (reducedMotion || typeof IntersectionObserver === "undefined") {
+      const frame = requestAnimationFrame(() => setRevealed(true));
+      return () => cancelAnimationFrame(frame);
     }
 
-    let count = 0;
-    const timer = window.setInterval(() => {
-      count += 1;
-      setIndex((current) => Math.min(current + 1, length - 1));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setRevealed(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.28 },
+    );
 
-      if (count >= length - 1) {
-        window.clearInterval(timer);
-      }
-    }, 1900 + offset);
-
-    return () => window.clearInterval(timer);
-  }, [length, offset, paused]);
-
-  return index;
-}
-
-export function RoadmapColumns() {
-  const [paused, setPaused] = useState(false);
-  const nowIndex = useRoadmapIndex(NOW.length, 0, paused);
-  const nextIndex = useRoadmapIndex(NEXT.length, 320, paused);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div
       className="roadmap-pro"
-      id="roadmap"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
-      onTouchStart={() => setPaused(true)}
+      ref={stageRef}
+      data-revealed={revealed}
+      aria-label="Planned ZeroSeal roadmap"
     >
-      <RoadmapList title="Now" items={NOW} activeIndex={nowIndex} />
-      <RoadmapList title="Next" items={NEXT} activeIndex={nextIndex} />
+      <span className="roadmap-pro__horizon" aria-hidden="true" />
+      {ROADMAP_ITEMS.map((item, index) => (
+        <article
+          className="roadmap-pro__card"
+          key={item.title}
+          style={{ "--reveal-index": index } as React.CSSProperties}
+        >
+          <span className="roadmap-pro__badge">PLANNED</span>
+          <span className="roadmap-pro__index" aria-hidden="true">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <h3>{item.title}</h3>
+          <p>{item.text}</p>
+        </article>
+      ))}
     </div>
-  );
-}
-
-function RoadmapList({
-  title,
-  items,
-  activeIndex,
-}: {
-  title: string;
-  items: ReadonlyArray<string>;
-  activeIndex: number;
-}) {
-  return (
-    <article className="roadmap-pro__column" tabIndex={0}>
-      <p>{title}</p>
-      <ul>
-        {items.map((item, index) => (
-          <li
-            key={item}
-            data-active={index === activeIndex}
-            data-seen={index <= activeIndex}
-          >
-            {item}
-          </li>
-        ))}
-      </ul>
-    </article>
   );
 }

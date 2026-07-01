@@ -1,142 +1,106 @@
 # ZeroSeal
 
-**Prove security impact. Keep private evidence private.**
+Prove security impact. Keep private evidence private.
 
-ZeroSeal is a privacy-preserving security disclosure product for researchers, bug bounty platforms, audit teams, and protocol security programmes.
+ZeroSeal is a privacy-first claim stamping and receipt verification layer for security researchers, bug bounty programmes, audit teams, protocols and disclosure workflows.
 
-It helps a researcher create a public, verifiable claim about a vulnerability without publishing the exploit path, raw report, proof of concept, private witness values, sensitive screenshots, salts, keys, or unpublished report content.
+## What ZeroSeal Is
 
-ZeroSeal is built around Stellar Testnet receipts, Freighter wallet approval, local private evidence handling, and proof-aware claim preparation.
+ZeroSeal lets a researcher prepare a security claim, keep sensitive evidence local and stamp only safe public commitments on Stellar Testnet. The result is a wallet-authorised receipt that can be checked later without exposing the raw report, proof of concept, notes, private files, salts or witness values.
 
-## Live Product
+## Why It Exists
 
-- Frontend: `https://zeroseal.vercel.app`
-- Network: Stellar Testnet
-- Repository: `https://github.com/yungthacreator/zeroseal`
+Security disclosure often starts before trust is settled. Researchers need a way to show that a claim existed at a specific time. Programmes need a way to inspect a public record without receiving unpublished exploit detail too early. ZeroSeal provides timestamped, wallet-authorised, verifiable claim evidence and receipts.
+
+ZeroSeal does not automatically resolve every dispute. It does not decide whether a vulnerability is valid, whether severity is correct, who found it first or whether a bounty must be paid.
+
+## Current Testnet Capabilities
+
+- Prepare a security claim in the browser.
+- Keep raw reports, PoCs, notes, private files, reproduction steps, salts, witness values, secrets and unpublished exploit detail private.
+- Create cryptographic commitments from the approved claim state.
+- Review the exact public fields before stamping.
+- Authorise a real Stellar Testnet `submit_claim` transaction with Freighter.
+- Record researcher address, researcher commitment, claim commitment and nullifier in the Claim Registry.
+- Reconcile a confirmed transaction into a ZeroSeal public receipt.
+- Verify receipts by receipt ID, claim ID or transaction hash.
+- Link each issued receipt to the confirmed Stellar transaction.
 
 ## Product Flow
 
-ZeroSeal has three primary entry points:
+1. Prepare report.
+2. Add private evidence.
+3. Generate private seal.
+4. Review public claim.
+5. Approve stamp.
+6. Receive and verify receipt.
 
-- **Create claim**: build a private claim from scratch.
-- **Try ZeroSeal**: use an example claim or enter test details to understand the full flow.
-- **Verify receipt**: inspect a public receipt, transaction hash, or claim identifier.
+## What Remains Private
 
-The user flow is:
+- Raw report.
+- PoC.
+- Notes.
+- Private files.
+- Reproduction steps.
+- Salts.
+- Witness values.
+- Secrets.
+- Unpublished exploit details.
 
-1. Choose where the vulnerability will be reported.
-2. Describe the target and finding.
-3. Add private evidence locally.
-4. Generate a private seal.
-5. Review the approved public claim.
-6. Approve the Stellar Testnet registry action with Freighter.
-7. Receive a public receipt after a real confirmed transaction.
+## What Is Publicly Stamped
 
-No fingerprint, private seal output, wallet request, transaction hash, ledger, or receipt is shown before the user takes the required action.
+- Researcher wallet.
+- Researcher commitment.
+- Claim commitment.
+- Nullifier.
+- Registry contract.
+- Method.
+- Transaction hash.
+- Ledger.
+- Network.
+- Public policy identifier.
 
-## What ZeroSeal Proves Today
+## Duplicate and Replay Protection
 
-The current Noir circuit supports a specific private impact-threshold predicate. It is designed for a double-withdrawal or stale-entitlement style impact claim.
+ZeroSeal can prevent replay of the same nullifier and reject exact commitment reuse where enforced by the contract. It does not yet determine whether two differently written reports describe the same underlying vulnerability. Semantic duplicate analysis and programme dispute tooling are planned roadmap items.
 
-The current predicate checks that:
+## Receipt Verification
 
-- the actor is unprivileged;
-- each individual withdrawal is within entitlement;
-- the combined withdrawals exceed entitlement;
-- demonstrated private loss is at least the public minimum loss threshold.
+Receipts can be verified by:
 
-The current implementation does not claim to prove every possible exploit or arbitrary exploit validity.
+- Receipt ID.
+- Claim ID.
+- Transaction hash.
 
-## Privacy Boundary
-
-### Stays Private
-
-- exploit details;
-- reproduction steps;
-- private files;
-- proof-of-concept content;
-- private witness values;
-- exact vulnerable paths;
-- salts and keys;
-- unpublished report content;
-- wallet secret keys and seed phrases.
-
-### Can Become Public
-
-- claim identifier;
-- reporting context;
-- programme or project context;
-- target snapshot hash;
-- policy identifier;
-- public threshold;
-- researcher fingerprint;
-- nullifier;
-- verifier version;
-- researcher public key after wallet approval;
-- transaction hash after confirmation;
-- ledger after confirmation;
-- registry contract;
-- receipt URL.
-
-## Stellar Testnet Flow
-
-ZeroSeal uses Freighter for wallet approval on Stellar Testnet.
-
-The app does not fabricate chain data. A receipt is only treated as confirmed when a real transaction hash is returned and can be shown through the Testnet receipt flow.
-
-Current on-chain action:
-
-- register or record the researcher fingerprint through the configured Claim Registry path;
-- persist receipt details locally and through the backend path when available;
-- link the user to Stellar explorer views for public inspection.
-
-## Application Routes
-
-- `/`: product homepage.
-- `/create`: create a private claim from scratch.
-- `/demo`: Try ZeroSeal.
-- `/verify`: verify a public receipt or transaction.
-- `/receipt/[identifier]`: inspect a receipt by transaction hash or local claim identifier.
+The verification response checks ZeroSeal persistence and the confirmed Stellar Testnet transaction, then displays the receipt, ledger, wallet, registry contract, public commitments and Stellar Explorer link.
 
 ## Architecture
 
-```text
-Researcher browser
-  |
-  | private evidence remains local
-  v
-Private seal generation
-  |
-  | public claim fields only
-  v
-ZeroSeal web app
-  |
-  | optional API persistence and structural checks
-  v
-ZeroSeal API
-  |
-  | Freighter wallet approval
-  v
-Stellar Testnet
-  |
-  | confirmed transaction
-  v
-Public receipt and verifier page
-```
+- Next.js frontend for claim preparation, public receipts, verification and public activity.
+- NestJS API for claims, receipts, continuations, reconciliation and verification.
+- PostgreSQL and Prisma for persistence.
+- Soroban Claim Registry for `submit_claim`.
+- Soroban verifier contract for the current verification surface.
+- Freighter wallet for Stellar Testnet authorisation.
+- UltraHonk proof preparation and structural proof handling where supported by the current workflow.
+- Local private evidence handling in the browser.
+- Backend receipt reconciliation after confirmed Stellar Testnet transactions.
 
-## Repository Structure
+Some receipt fields reflect the current Testnet workflow and may be expanded after further proof verification and security review.
 
-```text
-zeroseal/
-  apps/
-    api/      NestJS API, claim lifecycle, receipts, queues, Stellar services
-    web/      Next.js app, claim UI, Try ZeroSeal, receipt verification
-  circuits/   Noir circuits
-  contracts/  Soroban contracts
-  docs/       product truth, runbooks, deployment notes
-  packages/   shared contract client code
-  scripts/    validation and support scripts
-```
+## Stellar Testnet Contracts
+
+Registry:
+
+`CD6MKUVXB7ZTZQCGNMBVHMU4PGT2SEKS6Z5LF53HXDOAVCO3LGKGQ3JU`
+
+Verifier:
+
+`CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X`
+
+Current confirmed regression receipt:
+
+`zs_9f4c17af-8aae-4c4a-bebf-55c3c2d33f16`
 
 ## Local Development
 
@@ -146,10 +110,17 @@ Install dependencies:
 npm install
 ```
 
-Run the web app:
+Start local infrastructure:
 
 ```powershell
-npm.cmd --prefix apps/web run dev
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Generate Prisma client and apply migrations:
+
+```powershell
+npm.cmd --prefix apps/api run prisma:generate
+npm.cmd --prefix apps/api exec prisma migrate deploy
 ```
 
 Run the API:
@@ -158,62 +129,43 @@ Run the API:
 npm.cmd --prefix apps/api run dev
 ```
 
-Start local infrastructure when needed:
+Run the web app:
 
 ```powershell
-docker compose -f docker-compose.dev.yml up -d
+npm.cmd --prefix apps/web run dev
 ```
 
-## Required Checks
+Required environment values include database, Redis, API URL, Stellar Testnet RPC and contract IDs. Do not commit real secrets or private keys.
 
-```powershell
-npm.cmd --prefix apps/web run lint
-npm.cmd --prefix apps/web run typecheck
-npm.cmd --prefix apps/web run build
-npm.cmd --prefix apps/api run test
-npm.cmd --prefix apps/api run build
-```
+## Roadmap
 
-## Environment
+Planned items:
 
-Important environment values include:
+- Confidential Bounty Escrow.
+- Confidential Reward Tokens.
+- Programme API and SDK.
+- Duplicate Claim Coordination.
+- Stronger proof verification.
+- Mainnet readiness after security review.
 
-- `NEXT_PUBLIC_REGISTRY_CONTRACT_ID`
-- `NEXT_PUBLIC_VERIFIER_CONTRACT_ID`
-- `NEXT_PUBLIC_ZEROSEAL_API_URL`
-- `DATABASE_URL`
-- `REDIS_URL`
-- `STELLAR_NETWORK`
-- `STELLAR_RPC_URL`
-- `STELLAR_HORIZON_URL`
-- `REGISTRY_CONTRACT_ID`
-- `VERIFIER_CONTRACT_ID`
+These roadmap items are not presented as live product capabilities.
 
-The default product network is Stellar Testnet.
+## Security and Product Boundaries
 
-## Product Truth
+ZeroSeal:
 
-ZeroSeal is a real product surface with a real Testnet path, but the current proof boundary is intentionally specific.
+- Does not publish private evidence.
+- Does not replace responsible disclosure.
+- Does not determine vulnerability validity.
+- Does not assign severity automatically.
+- Does not guarantee bounty payment.
+- Currently runs on Stellar Testnet.
+- Must undergo further security review before mainnet use.
 
-Current truth:
+## Repository and Live Product
 
-- private evidence is not published by the claim wizard;
-- example data loads only after the user clicks Load example;
-- researcher fingerprint does not exist before private seal generation;
-- receipt pages do not invent transactions;
-- the current circuit supports a private impact-threshold predicate;
-- server-side UltraHonk verification and wider arbitrary evidence binding remain roadmap items.
+Repository:
 
-## Documentation
+`https://github.com/yungthacreator/zeroseal`
 
-Useful docs:
-
-- `docs/PRODUCT_FLOW_TRUTH.md`
-- `docs/DEMO_TRUTH_MATRIX.md`
-- `docs/DEMO_RUNBOOK.md`
-- `docs/RENDER_DEPLOYMENT.md`
-- `docs/ARCHITECTURE_DECISION.md`
-
-## Status
-
-ZeroSeal is competition-ready product infrastructure for privacy-preserving security claims on Stellar Testnet. The current milestone focuses on the full user journey from private evidence to public receipt while keeping proof claims precise and honest.
+Use a production URL only after the deployed frontend and API are confirmed working together.

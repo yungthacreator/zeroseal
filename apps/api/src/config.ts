@@ -26,6 +26,7 @@ export const configSchema = z
     API_PUBLIC_URL: z.string().url().optional(),
     RENDER_EXTERNAL_URL: z.string().url().optional(),
     RUN_EMBEDDED_WORKER: booleanString,
+    WORKER_REQUIRED_FOR_READY: booleanString.default(false),
     REDIS_REQUIRED_FOR_READY: booleanString.default(false),
     NODE_ENV: z
       .enum(["development", "test", "production"])

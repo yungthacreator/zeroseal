@@ -33,8 +33,10 @@ services:
         value: production
       - key: RUN_EMBEDDED_WORKER
         value: true
+      - key: WORKER_REQUIRED_FOR_READY
+        value: true
       - key: REDIS_REQUIRED_FOR_READY
-        value: false
+        value: true
       - key: CORS_ALLOWED_ORIGINS
         value: https://zeroseal.vercel.app
       - key: STELLAR_NETWORK
@@ -46,7 +48,7 @@ services:
       - key: STELLAR_NETWORK_PASSPHRASE
         value: Test SDF Network ; September 2015
       - key: REGISTRY_CONTRACT_ID
-        value: CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R
+        value: CD6MKUVXB7ZTZQCGNMBVHMU4PGT2SEKS6Z5LF53HXDOAVCO3LGKGQ3JU
       - key: VERIFIER_CONTRACT_ID
         value: CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X
       - key: EXPLORER_TRANSACTION_BASE_URL

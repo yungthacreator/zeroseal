@@ -1,16 +1,25 @@
 "use client";
 
 import { Buffer } from "buffer";
+import { signTransaction as freighterSignTransaction } from "@stellar/freighter-api";
+import { rpc, TransactionBuilder } from "@stellar/stellar-sdk";
 import Link from "next/link";
-import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useWallet } from "@/context/wallet-context";
 import {
+  createBackendContinuation,
   createBackendClaim,
+  getApiReadiness,
+  getBackendContinuation,
+  getBackendClaimReceipt,
+  getBackendTransaction,
   recordBackendTransaction,
   type ApiClaim,
+  type ApiReceipt,
+  type ContinuationPayload,
+  verifyReceiptHref,
 } from "@/lib/api/claims";
 import {
   buildPublicPayloadAsync,
@@ -24,7 +33,11 @@ import {
   type PublicPayload,
 } from "@/lib/claim-flow";
 import { persistReceipt } from "@/lib/receipt-store";
-import { createClaimRegistryClient } from "@/lib/stellar/claim-registry-client";
+import {
+  createClaimRegistryClient,
+  decodeSubmitClaimArgsFromXdr,
+  readClaimRegistryRuntimeConfig,
+} from "@/lib/stellar/claim-registry-client";
 import {
   DEFAULT_REGISTRY_CONTRACT_ID,
   DEFAULT_VERIFIER_CONTRACT_ID,
@@ -32,7 +45,119 @@ import {
 import { explorerTransactionUrl } from "@/lib/stellar/testnet";
 
 type WizardMode = "create" | "demo";
-type PublishState = "idle" | "preparing" | "awaiting" | "submitting" | "confirmed" | "failed";
+type PublishState =
+  | "idle"
+  | "checking_readiness"
+  | "preparing"
+  | "reviewing"
+  | "wallet_retry"
+  | "awaiting_wallet"
+  | "signed"
+  | "submitted"
+  | "confirming"
+  | "issuing_receipt"
+  | "confirmed"
+  | "backend_sync_failed"
+  | "failed";
+
+type PendingTransaction = {
+  claimId: string;
+  transactionHash: string;
+  ledger: string | null;
+  payload: PublicPayload;
+  review: PreparedReview;
+};
+
+type PreparedRegistryAction = {
+  claim: ApiClaim;
+  payload: PublicPayload;
+  review: PreparedReview;
+  signableXdr: string;
+  networkPassphrase: string;
+  rpcUrl: string;
+};
+
+type PreparedReview = {
+  wallet: string;
+  contractId: string;
+  method: "submit_claim";
+  researcherCommitment: string;
+  claimCommitment: string;
+  nullifier: string;
+  simulatedFee: string;
+  feeStroops: string;
+  feeXlm: string;
+  signableXdr: string;
+};
+
+type ReportStepField =
+  | "reportingContext"
+  | "programmeName"
+  | "affectedComponent"
+  | "targetType"
+  | "targetLocator";
+
+type ReportStepValues = Pick<
+  ClaimDraft,
+  ReportStepField
+>;
+
+type ReportStepValidation = {
+  valid: boolean;
+  errors: Partial<Record<ReportStepField, string>>;
+};
+
+type FindingStepField =
+  | "findingTitle"
+  | "bugCategory"
+  | "publicThreshold"
+  | "claimedSeverity"
+  | "impactStatement";
+
+type FindingStepValues = {
+  findingTitle: string;
+  bugCategory: string;
+  publicThreshold: string;
+  claimedSeverity: string;
+  impactStatement: string;
+};
+
+type FindingStepValidation = {
+  valid: boolean;
+  errors: Partial<Record<FindingStepField, string>>;
+};
+
+type PrivateEvidenceStepField =
+  | "vulnerabilityDescription"
+  | "reproductionSteps"
+  | "proofOfConcept"
+  | "privateImpactValues";
+
+type PrivateEvidenceStepValues = Pick<
+  ClaimDraft["privateEvidence"],
+  PrivateEvidenceStepField
+>;
+
+type PrivateEvidenceStepValidation = {
+  valid: boolean;
+  errors: Partial<Record<PrivateEvidenceStepField, string>>;
+  publiclyExcludedFields: string[];
+};
+
+type PublishActionStateInput = {
+  reviewed: boolean;
+  hasWallet: boolean;
+  walletStatus: string;
+  publishState: PublishState;
+  hasPreparedTransaction: boolean;
+  hasPendingTransaction: boolean;
+};
+
+type PublishActionState = {
+  disabled: boolean;
+  label: string;
+  reason: string | null;
+};
 
 const STEPS = [
   "Report",
@@ -42,7 +167,7 @@ const STEPS = [
   "Sign and receipt",
 ] as const;
 
-const REPORTING_CONTEXTS = [
+export const REPORTING_CONTEXTS = [
   { label: "Immunefi", category: "Web3 bug bounty", logo: "/brands/immunefi.svg" },
   { label: "HackerOne", category: "Bug bounty and vulnerability disclosure", logo: "/brands/hackerone.svg" },
   { label: "Bugcrowd", category: "Bug bounty and vulnerability disclosure" },
@@ -73,14 +198,6 @@ function isMobileViewport(): boolean {
     return false;
   }
   return window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
-}
-
-function randomToken(): string {
-  const bytes = new Uint8Array(16);
-  globalThis.crypto?.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function extractTransactionHash(value: unknown): string | null {
@@ -177,6 +294,612 @@ function publicInputRows(seal: NonNullable<ClaimDraft["privateSeal"]>) {
   ];
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function publishButtonLabel(
+  state: PublishState,
+  address: string | null,
+  walletStatus: string,
+): string {
+  if (!address) {
+    if (walletStatus === "wrong_network") {
+      return "Switch to Testnet";
+    }
+    return "Connect wallet";
+  }
+
+  switch (state) {
+    case "checking_readiness":
+      return "Checking backend";
+    case "preparing":
+      return "Preparing your stamp";
+    case "reviewing":
+      return "Approve stamp in Freighter";
+    case "wallet_retry":
+      return "Retry wallet approval";
+    case "awaiting_wallet":
+      return "Waiting for wallet approval";
+    case "signed":
+      return "Stamp signed";
+    case "submitted":
+      return "Stamp submitted";
+    case "confirming":
+      return "Waiting for Stellar confirmation";
+    case "issuing_receipt":
+      return "Issuing receipt";
+    case "confirmed":
+      return "Stamp confirmed";
+    case "backend_sync_failed":
+      return "Retry backend sync";
+    case "failed":
+      return "Retry Testnet action";
+    case "idle":
+      return "Prepare stamp";
+  }
+}
+
+export function getPublishActionState(
+  input: PublishActionStateInput,
+): PublishActionState {
+  const label = publishButtonLabel(
+    input.publishState,
+    input.hasWallet ? "connected" : null,
+    input.walletStatus,
+  );
+
+  if (!input.reviewed) {
+    return {
+      disabled: true,
+      label,
+      reason: "Review and approve the public claim first.",
+    };
+  }
+
+  if (!input.hasWallet) {
+    return {
+      disabled: false,
+      label,
+      reason: "Connect a wallet first.",
+    };
+  }
+
+  if (input.walletStatus === "wrong_network") {
+    return {
+      disabled: false,
+      label,
+      reason: "Switch Freighter to Testnet.",
+    };
+  }
+
+  if (input.publishState === "reviewing" || input.publishState === "wallet_retry") {
+    if (!input.hasPreparedTransaction) {
+      return {
+        disabled: true,
+        label,
+        reason: "Signable XDR is unavailable. Prepare the stamp again.",
+      };
+    }
+
+    return {
+      disabled: false,
+      label,
+      reason: null,
+    };
+  }
+
+  if (input.publishState === "backend_sync_failed") {
+    return {
+      disabled: !input.hasPendingTransaction,
+      label,
+      reason: input.hasPendingTransaction
+        ? "Retry backend sync with the preserved transaction hash."
+        : "Transaction hash is unavailable. Prepare the stamp again.",
+    };
+  }
+
+  if (
+    input.publishState === "checking_readiness" ||
+    input.publishState === "preparing"
+  ) {
+    return {
+      disabled: true,
+      label,
+      reason: "Preparing your stamp.",
+    };
+  }
+
+  if (input.publishState === "awaiting_wallet") {
+    return {
+      disabled: true,
+      label,
+      reason: "Waiting for wallet approval.",
+    };
+  }
+
+  if (input.publishState === "submitted") {
+    return {
+      disabled: true,
+      label,
+      reason: "Stamping transaction.",
+    };
+  }
+
+  if (input.publishState === "confirming") {
+    return {
+      disabled: true,
+      label,
+      reason: "Waiting for Stellar confirmation.",
+    };
+  }
+
+  if (input.publishState === "issuing_receipt") {
+    return {
+      disabled: true,
+      label,
+      reason: "Synchronising receipt.",
+    };
+  }
+
+  if (input.publishState === "confirmed") {
+    return {
+      disabled: true,
+      label,
+      reason: "Receipt issued.",
+    };
+  }
+
+  return {
+    disabled: false,
+    label,
+    reason: null,
+  };
+}
+
+export function clearWalletScopedDraftState(draft: ClaimDraft): ClaimDraft {
+  return {
+    ...draft,
+    state: "DRAFT",
+    researcherFingerprint: null,
+    privateSeal: null,
+    receipt: null,
+  };
+}
+
+export function shouldClearWalletScopedState(
+  previousWallet: string | null,
+  nextWallet: string | null,
+): boolean {
+  return Boolean(previousWallet) && previousWallet !== nextWallet;
+}
+
+export function clearedWalletRuntimeState() {
+  return {
+    reviewed: false,
+    publishState: "idle" as PublishState,
+    publicPayload: null as PublicPayload | null,
+    pendingTransaction: null as PendingTransaction | null,
+    backendReceipt: null as ApiReceipt | null,
+    preparedReview: null as PreparedReview | null,
+    hasPreparedTransaction: false,
+    technicalError: null as string | null,
+    continuationLinkPath: null as string | null,
+  };
+}
+
+export function desktopContinuationUrl(path: string, origin?: string): string {
+  const configuredOrigin = process.env.NEXT_PUBLIC_ZEROSEAL_PUBLIC_URL?.replace(/\/$/, "");
+  const runtimeOrigin = origin?.replace(/\/$/, "") ?? "";
+  const publicOrigin =
+    configuredOrigin ||
+    (
+      runtimeOrigin.includes("localhost") || runtimeOrigin.includes("127.0.0.1")
+        ? ""
+        : runtimeOrigin
+    );
+  return `${publicOrigin}${path}`;
+}
+
+function errorMessage(error: unknown): string {
+  return (
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message
+        : ""
+  );
+}
+
+export function signedTransactionMessage(error: unknown): string {
+  const message = errorMessage(error);
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("timeout") ||
+    normalized.includes("transport")
+  ) {
+    return "Freighter did not respond. Open and unlock Freighter, confirm Testnet, then retry wallet approval.";
+  }
+
+  if (
+    normalized.includes("reject") ||
+    normalized.includes("declin") ||
+    normalized.includes("cancel") ||
+    normalized.includes("denied")
+  ) {
+    return "Freighter approval was rejected. The claim is preserved and no transaction was submitted.";
+  }
+
+  if (normalized.includes("hosterror") || normalized.includes("host error")) {
+    return "Stamp preparation failed.";
+  }
+
+  return message || "Stamp preparation failed.";
+}
+
+function simulatedFee(transaction: { built?: { fee?: string }; raw?: { baseFee?: string } }): string {
+  return transaction.built?.fee ?? transaction.raw?.baseFee ?? "Unavailable";
+}
+
+export function feeDisplayFromXdr(
+  signableXdr: string,
+  networkPassphrase: string,
+): { stroops: string; xlm: string } {
+  const transaction = TransactionBuilder.fromXDR(signableXdr, networkPassphrase);
+  const stroops = BigInt(transaction.fee);
+  const stroopsPerXlm = BigInt(10_000_000);
+  const whole = stroops / stroopsPerXlm;
+  const fraction = (stroops % stroopsPerXlm).toString().padStart(7, "0");
+  return {
+    stroops: stroops.toString(),
+    xlm: `${whole}.${fraction}`,
+  };
+}
+
+type FreighterSignResult = {
+  signedTxXdr: string;
+  signerAddress: string;
+  error?: { message?: string; code?: number };
+};
+
+export async function signPreparedXdr({
+  signableXdr,
+  walletAddress,
+  networkPassphrase,
+  signTransaction = freighterSignTransaction,
+}: {
+  signableXdr: string;
+  walletAddress: string;
+  networkPassphrase: string;
+  signTransaction?: (
+    transactionXdr: string,
+    opts?: { networkPassphrase?: string; address?: string },
+  ) => Promise<FreighterSignResult>;
+}): Promise<{ signedTxXdr: string; signerAddress: string }> {
+  const response = await signTransaction(signableXdr, {
+    networkPassphrase,
+    address: walletAddress,
+  });
+
+  if (response.error) {
+    throw new Error(walletApprovalFailureMessage(response.error.message ?? ""));
+  }
+
+  if (!response.signedTxXdr) {
+    throw new Error("Freighter did not return a signed transaction.");
+  }
+
+  if (response.signerAddress && response.signerAddress !== walletAddress) {
+    throw new Error("Freighter signed with a different wallet.");
+  }
+
+  return {
+    signedTxXdr: response.signedTxXdr,
+    signerAddress: response.signerAddress,
+  };
+}
+
+function walletApprovalFailureMessage(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("timeout") || normalized.includes("transport")) {
+    return "Freighter did not respond. Open and unlock Freighter, confirm Testnet, then retry wallet approval.";
+  }
+  if (
+    normalized.includes("reject") ||
+    normalized.includes("declin") ||
+    normalized.includes("cancel") ||
+    normalized.includes("denied")
+  ) {
+    return "Freighter approval was rejected. The claim is preserved and no transaction was submitted.";
+  }
+  return message || "Freighter did not respond. Open and unlock Freighter, confirm Testnet, then retry wallet approval.";
+}
+
+function isWalletApprovalFailure(error: unknown): boolean {
+  const message = errorMessage(error).toLowerCase();
+  return (
+    message.includes("freighter did not respond") ||
+    message.includes("freighter approval was rejected") ||
+    message.includes("freighter did not return") ||
+    message.includes("different wallet")
+  );
+}
+
+async function submitSignedXdr({
+  signedTxXdr,
+  networkPassphrase,
+  rpcUrl,
+}: {
+  signedTxXdr: string;
+  networkPassphrase: string;
+  rpcUrl: string;
+}) {
+  const server = new rpc.Server(rpcUrl);
+  const transaction = TransactionBuilder.fromXDR(signedTxXdr, networkPassphrase);
+  const sent = await server.sendTransaction(transaction);
+  const hash =
+    typeof sent.hash === "string" ? sent.hash : extractTransactionHash(sent);
+
+  if (!hash) {
+    throw new Error("Stellar did not return a transaction hash.");
+  }
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const status = await server.getTransaction(hash);
+    if (status.status === "SUCCESS") {
+      return {
+        hash,
+        ledger: typeof status.ledger === "number" ? String(status.ledger) : null,
+      };
+    }
+    if (status.status === "FAILED") {
+      throw new Error("Stellar Testnet reported the signed transaction as failed.");
+    }
+    await sleep(1500);
+  }
+
+  return { hash, ledger: null };
+}
+
+export function validateReportStep(values: ReportStepValues): ReportStepValidation {
+  const errors: Partial<Record<ReportStepField, string>> = {};
+  const reportingPath = values.reportingContext.trim();
+  const programmeName = values.programmeName.trim();
+  const targetName = values.affectedComponent.trim();
+  const targetType = values.targetType.trim();
+  const targetLocator = values.targetLocator.trim();
+
+  if (!REPORTING_CONTEXTS.some((context) => context.label === reportingPath)) {
+    errors.reportingContext = "Select a reporting path.";
+  }
+
+  if (!programmeName) {
+    errors.programmeName = "Enter the programme or project name.";
+  }
+
+  if (!targetName) {
+    errors.affectedComponent = "Enter the target name.";
+  }
+
+  if (!TARGET_TYPES.includes(targetType as (typeof TARGET_TYPES)[number])) {
+    errors.targetType = "Select a target type.";
+  }
+
+  if (!targetLocator) {
+    errors.targetLocator = locatorMessageForTargetType(targetType);
+  } else if (!isValidLocatorForTargetType(targetType, targetLocator)) {
+    errors.targetLocator = locatorMessageForTargetType(targetType);
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function validateFindingStep(
+  values: FindingStepValues,
+): FindingStepValidation {
+  const errors: Partial<Record<FindingStepField, string>> = {};
+
+  if (!values.findingTitle.trim()) {
+    errors.findingTitle = "Enter a public title.";
+  }
+
+  if (!values.bugCategory.trim()) {
+    errors.bugCategory = "Enter the vulnerability category.";
+  }
+
+  if (!values.publicThreshold.trim()) {
+    errors.publicThreshold = "Describe the public impact threshold.";
+  }
+
+  if (!SEVERITIES.includes(values.claimedSeverity as (typeof SEVERITIES)[number])) {
+    errors.claimedSeverity = "Select a severity.";
+  }
+
+  if (!values.impactStatement.trim()) {
+    errors.impactStatement = "Enter a short public summary.";
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function validatePrivateEvidenceStep(
+  values: PrivateEvidenceStepValues,
+): PrivateEvidenceStepValidation {
+  const errors: Partial<Record<PrivateEvidenceStepField, string>> = {};
+
+  if (!values.vulnerabilityDescription.trim()) {
+    errors.vulnerabilityDescription = "Enter the private report.";
+  }
+
+  if (!values.reproductionSteps.trim()) {
+    errors.reproductionSteps = "Enter the reproduction steps.";
+  }
+
+  if (!values.proofOfConcept.trim()) {
+    errors.proofOfConcept = "Enter the PoC notes.";
+  }
+
+  if (!values.privateImpactValues.trim()) {
+    errors.privateImpactValues = "Enter the private impact value.";
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+    publiclyExcludedFields: [
+      "Private report",
+      "Reproduction steps",
+      "PoC notes",
+      "Private impact value",
+    ],
+  };
+}
+
+function isValidLocatorForTargetType(targetType: string, value: string): boolean {
+  if (targetType === "Smart contract") {
+    return isValidContractAddress(value) || isValidHttpUrl(value);
+  }
+
+  if (
+    targetType === "Repository" ||
+    targetType === "API" ||
+    targetType === "Web application" ||
+    targetType === "Mobile application"
+  ) {
+    return isValidHttpUrl(value);
+  }
+
+  return false;
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function isValidContractAddress(value: string): boolean {
+  const trimmed = value.trim();
+  return /^C[A-Z2-7]{55}$/.test(trimmed) || /^0x[a-f0-9]{40}$/i.test(trimmed);
+}
+
+function locatorMessageForTargetType(targetType: string): string {
+  if (targetType === "Repository") {
+    return "Enter a valid repository URL.";
+  }
+  if (targetType === "Smart contract") {
+    return "Enter a valid contract address or URL.";
+  }
+  if (
+    targetType === "API" ||
+    targetType === "Web application" ||
+    targetType === "Mobile application"
+  ) {
+    return "Enter a valid URL.";
+  }
+  return "Select a target type before entering the repository or contract.";
+}
+
+export function ReportStepValidationMessage({
+  message,
+}: {
+  message: string | null;
+}) {
+  return message ? <em className="field-error">{message}</em> : null;
+}
+
+function publicClaimFromDraft(draft: ClaimDraft): ContinuationPayload["publicClaim"] {
+  return {
+    reportingContext: draft.reportingContext || null,
+    programmeName: draft.programmeName || null,
+    targetType: draft.targetType || null,
+    targetLocator: draft.targetLocator || null,
+    affectedComponent: draft.affectedComponent || null,
+    findingTitle: draft.findingTitle || null,
+    bugCategory: draft.bugCategory || null,
+    claimedSeverity: draft.claimedSeverity || null,
+    impactStatement: draft.impactStatement || null,
+    publicThreshold: draft.publicClaim.publicThreshold || null,
+  };
+}
+
+function draftFromContinuation(payload: ContinuationPayload): ClaimDraft {
+  const initial = createInitialClaimDraft();
+  const severity = payload.publicClaim.claimedSeverity;
+  return {
+    ...initial,
+    reportingContext: payload.publicClaim.reportingContext ?? "",
+    programmeName: payload.publicClaim.programmeName ?? payload.publicPayload.programmeContext ?? "",
+    targetType: payload.publicClaim.targetType ?? "",
+    targetLocator: payload.publicClaim.targetLocator ?? "",
+    affectedComponent: payload.publicClaim.affectedComponent ?? "",
+    network: payload.publicPayload.network,
+    findingTitle: payload.publicClaim.findingTitle ?? "",
+    bugCategory: payload.publicClaim.bugCategory ?? "",
+    claimedSeverity: SEVERITIES.includes(severity as (typeof SEVERITIES)[number])
+      ? (severity as ClaimDraft["claimedSeverity"])
+      : "",
+    impactStatement: payload.publicClaim.impactStatement ?? "",
+    publicClaim: {
+      ...initial.publicClaim,
+      publicThreshold: payload.publicClaim.publicThreshold ?? payload.publicPayload.publicThreshold,
+      policyIdentifier: payload.publicPayload.publicPolicyIdentifier,
+      policyVersion: payload.publicPayload.publicPolicyVersion,
+      verifierVersion: payload.publicPayload.verifierVersion,
+    },
+    state: "PUBLIC_CLAIM_REVIEWED",
+    researcherFingerprint: payload.seal.researcherFingerprint,
+    privateSeal: {
+      claimIdentifier: payload.seal.claimIdentifier,
+      canonicalClaimHash: payload.seal.canonicalClaimHash,
+      privateEvidenceDigest: payload.seal.privateEvidenceDigest,
+      saltHex: "",
+      researcherFingerprint: payload.seal.researcherFingerprint,
+      nullifier: payload.seal.nullifier,
+      recoveryBundle: {
+        schema: "zeroseal.private-recovery.v1",
+        createdAt: payload.publicPayload.timestamp,
+        privateEvidence: initial.privateEvidence,
+        saltHex: "",
+        canonicalClaimHash: payload.seal.canonicalClaimHash,
+        researcherFingerprint: payload.seal.researcherFingerprint,
+        nullifier: payload.seal.nullifier,
+      },
+    },
+  };
+}
+
+async function assertBackendReady(): Promise<void> {
+  const readiness = await getApiReadiness();
+  const status = readiness.status;
+  const checks =
+    readiness.checks && typeof readiness.checks === "object"
+      ? (readiness.checks as Record<string, unknown>)
+      : {};
+  const unavailable = Object.entries(checks)
+    .filter(([, value]) => value === "unavailable" || value === "unknown")
+    .map(([key, value]) => `${key}: ${String(value)}`);
+
+  if (status !== "ready" || unavailable.length > 0) {
+    throw new Error(
+      `Backend readiness failed. ${unavailable.length ? unavailable.join(", ") : "The API is not ready."} Retry readiness before opening Freighter.`,
+    );
+  }
+}
+
 export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const searchParams = useSearchParams();
   const [draft, setDraft] = useState<ClaimDraft>(() => {
@@ -195,11 +918,28 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const [reviewed, setReviewed] = useState(false);
   const [publishState, setPublishState] = useState<PublishState>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [technicalError, setTechnicalError] = useState<string | null>(null);
   const [publicPayload, setPublicPayload] = useState<PublicPayload | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [backendClaim, setBackendClaim] = useState<ApiClaim | null>(null);
+  const [pendingTransaction, setPendingTransaction] =
+    useState<PendingTransaction | null>(null);
+  const [backendReceipt, setBackendReceipt] = useState<ApiReceipt | null>(null);
+  const [preparedReview, setPreparedReview] = useState<PreparedReview | null>(null);
+  const [hasPreparedTransaction, setHasPreparedTransaction] = useState(false);
+  const [touchedReportFields, setTouchedReportFields] = useState<
+    Partial<Record<ReportStepField, boolean>>
+  >({});
+  const [touchedFindingFields, setTouchedFindingFields] = useState<
+    Partial<Record<FindingStepField, boolean>>
+  >({});
+  const [touchedPrivateEvidenceFields, setTouchedPrivateEvidenceFields] =
+    useState<Partial<Record<PrivateEvidenceStepField, boolean>>>({});
+  const preparedActionRef = useRef<PreparedRegistryAction | null>(null);
+  const approvalInFlightRef = useRef(false);
+  const previousWalletRef = useRef<string | null>(null);
   const [mobileSigning, setMobileSigning] = useState(() => isMobileViewport());
-  const [continuationToken, setContinuationToken] = useState<string | null>(null);
+  const [continuationLinkPath, setContinuationLinkPath] = useState<string | null>(null);
   const { address, status, connect } = useWallet();
 
   const seal = draft.privateSeal ?? null;
@@ -213,6 +953,117 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   const isTryMode = mode === "demo";
   const pageTitle = isTryMode ? "Try ZeroSeal" : "Create a private claim";
   const currentStep = STEPS[step];
+  const publishAction = getPublishActionState({
+    reviewed,
+    hasWallet: Boolean(address),
+    walletStatus: status,
+    publishState,
+    hasPreparedTransaction,
+    hasPendingTransaction: Boolean(pendingTransaction),
+  });
+  const stepOneValidation = useMemo(
+    () =>
+      validateReportStep({
+        reportingContext: draft.reportingContext,
+        programmeName: draft.programmeName,
+        affectedComponent: draft.affectedComponent,
+        targetType: draft.targetType,
+        targetLocator: draft.targetLocator,
+      }),
+    [
+      draft.reportingContext,
+      draft.programmeName,
+      draft.affectedComponent,
+      draft.targetType,
+      draft.targetLocator,
+    ],
+  );
+
+  const markReportFieldTouched = (field: ReportStepField) => {
+    setTouchedReportFields((current) => ({ ...current, [field]: true }));
+  };
+
+  const reportFieldError = (field: ReportStepField): string | null =>
+    touchedReportFields[field] ? stepOneValidation.errors[field] ?? null : null;
+  const findingStepValidation = useMemo(
+    () =>
+      validateFindingStep({
+        findingTitle: draft.findingTitle,
+        bugCategory: draft.bugCategory,
+        publicThreshold: draft.publicClaim.publicThreshold,
+        claimedSeverity: draft.claimedSeverity,
+        impactStatement: draft.impactStatement,
+      }),
+    [
+      draft.findingTitle,
+      draft.bugCategory,
+      draft.publicClaim.publicThreshold,
+      draft.claimedSeverity,
+      draft.impactStatement,
+    ],
+  );
+  const privateEvidenceValidation = useMemo(
+    () =>
+      validatePrivateEvidenceStep({
+        vulnerabilityDescription: draft.privateEvidence.vulnerabilityDescription,
+        reproductionSteps: draft.privateEvidence.reproductionSteps,
+        proofOfConcept: draft.privateEvidence.proofOfConcept,
+        privateImpactValues: draft.privateEvidence.privateImpactValues,
+      }),
+    [
+      draft.privateEvidence.vulnerabilityDescription,
+      draft.privateEvidence.reproductionSteps,
+      draft.privateEvidence.proofOfConcept,
+      draft.privateEvidence.privateImpactValues,
+    ],
+  );
+
+  const markFindingFieldTouched = (field: FindingStepField) => {
+    setTouchedFindingFields((current) => ({ ...current, [field]: true }));
+  };
+
+  const findingFieldError = (field: FindingStepField): string | null =>
+    touchedFindingFields[field]
+      ? findingStepValidation.errors[field] ?? null
+      : null;
+
+  const markPrivateEvidenceFieldTouched = (field: PrivateEvidenceStepField) => {
+    setTouchedPrivateEvidenceFields((current) => ({ ...current, [field]: true }));
+  };
+
+  const privateEvidenceFieldError = (
+    field: PrivateEvidenceStepField,
+  ): string | null =>
+    touchedPrivateEvidenceFields[field]
+      ? privateEvidenceValidation.errors[field] ?? null
+      : null;
+  const continueReason = useMemo(() => {
+    if (step === 0 && !stepOneValidation.valid) {
+      return Object.values(stepOneValidation.errors)[0] ?? "Complete the report fields.";
+    }
+    if (step === 1 && !findingStepValidation.valid) {
+      return Object.values(findingStepValidation.errors)[0] ?? "Complete the finding fields.";
+    }
+    if (step === 2 && !privateEvidenceValidation.valid) {
+      return (
+        Object.values(privateEvidenceValidation.errors)[0] ??
+        "Complete the required private evidence fields."
+      );
+    }
+    if (step === 3 && !reviewed) {
+      return "Approve the public claim before continuing.";
+    }
+    return null;
+  }, [
+    findingStepValidation.errors,
+    findingStepValidation.valid,
+    privateEvidenceValidation.errors,
+    privateEvidenceValidation.valid,
+    reviewed,
+    step,
+    stepOneValidation.errors,
+    stepOneValidation.valid,
+  ]);
 
   useEffect(() => {
     const onResize = () => setMobileSigning(isMobileViewport());
@@ -220,33 +1071,91 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  useEffect(() => {
+    const previousWallet = previousWalletRef.current;
+    const nextWallet = address ?? null;
+    previousWalletRef.current = nextWallet;
+
+    if (!shouldClearWalletScopedState(previousWallet, nextWallet)) {
+      return;
+    }
+
+    const cleared = clearedWalletRuntimeState();
+    preparedActionRef.current = null;
+    approvalInFlightRef.current = false;
+    setDraft((current) => clearWalletScopedDraftState(current));
+    setReviewed(cleared.reviewed);
+    setPublicPayload(cleared.publicPayload);
+    setPublishState(cleared.publishState);
+    setPendingTransaction(cleared.pendingTransaction);
+    setBackendReceipt(cleared.backendReceipt);
+    setPreparedReview(cleared.preparedReview);
+    setHasPreparedTransaction(cleared.hasPreparedTransaction);
+    setTechnicalError(cleared.technicalError);
+    setContinuationLinkPath(cleared.continuationLinkPath);
+    setMessage("Wallet changed. Prepare a new stamp for the connected Testnet wallet.");
+  }, [address]);
+
+  useEffect(() => {
+    const token = searchParams.get("continue")?.trim();
+    if (!token) {
+      return;
+    }
+
+    let cancelled = false;
+
+    getBackendContinuation(token)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setDraft(draftFromContinuation(payload));
+        setSelectedFiles([]);
+        setPublicPayload(payload.publicPayload);
+        setReviewed(true);
+        setStep(4);
+        setMessage("Desktop continuation loaded. Private evidence was not included in this handoff.");
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : "Continuation link could not be loaded.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
+
   const ready = useMemo(() => {
     switch (step) {
       case 0:
-        return Boolean(draft.reportingContext && draft.programmeName && draft.affectedComponent);
+        return stepOneValidation.valid;
       case 1:
-        return Boolean(
-          draft.findingTitle &&
-            draft.claimedSeverity &&
-            draft.bugCategory &&
-            draft.impactStatement &&
-            draft.publicClaim.publicThreshold,
-        );
+        return findingStepValidation.valid;
       case 2:
-        return Boolean(
-          draft.privateEvidence.vulnerabilityDescription ||
-            draft.privateEvidence.reproductionSteps ||
-            draft.privateEvidence.proofOfConcept ||
-            selectedFiles.length,
-        );
+        return privateEvidenceValidation.valid;
       case 3:
         return reviewed;
       default:
         return false;
     }
-  }, [draft, reviewed, selectedFiles.length, step]);
+  }, [
+    findingStepValidation.valid,
+    privateEvidenceValidation.valid,
+    reviewed,
+    step,
+    stepOneValidation.valid,
+  ]);
 
   const update = (patch: Partial<ClaimDraft>) => {
+    if (preparedActionRef.current || preparedReview) {
+      preparedActionRef.current = null;
+      setPreparedReview(null);
+      setHasPreparedTransaction(false);
+      setPublishState((current) => (current === "reviewing" ? "idle" : current));
+      setMessage("Claim changed after preparation. Prepare the stamp again before approval.");
+    }
     setDraft((current) => ({ ...current, ...patch }));
   };
 
@@ -254,6 +1163,13 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     key: keyof ClaimDraft["privateEvidence"],
     value: string,
   ) => {
+    if (preparedActionRef.current || preparedReview) {
+      preparedActionRef.current = null;
+      setPreparedReview(null);
+      setHasPreparedTransaction(false);
+      setPublishState((current) => (current === "reviewing" ? "idle" : current));
+      setMessage("Private evidence changed after preparation. Prepare the stamp again before approval.");
+    }
     setDraft((current) => ({
       ...current,
       privateEvidence: { ...current.privateEvidence, [key]: value },
@@ -262,6 +1178,38 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
 
   const continueStep = () => {
     setMessage(null);
+    if (step === 0 && !stepOneValidation.valid) {
+      setTouchedReportFields({
+        reportingContext: true,
+        programmeName: true,
+        affectedComponent: true,
+        targetType: true,
+        targetLocator: true,
+      });
+      setMessage("Complete the required report fields before continuing.");
+      return;
+    }
+    if (step === 1 && !findingStepValidation.valid) {
+      setTouchedFindingFields({
+        findingTitle: true,
+        bugCategory: true,
+        publicThreshold: true,
+        claimedSeverity: true,
+        impactStatement: true,
+      });
+      setMessage("Complete the public finding fields before continuing.");
+      return;
+    }
+    if (step === 2 && !privateEvidenceValidation.valid) {
+      setTouchedPrivateEvidenceFields({
+        vulnerabilityDescription: true,
+        reproductionSteps: true,
+        proofOfConcept: true,
+        privateImpactValues: true,
+      });
+      setMessage("Complete the required private evidence fields before sealing.");
+      return;
+    }
     if (step === 2) {
       update({ state: nextClaimState("DRAFT", "privateEvidenceReady") });
     }
@@ -276,6 +1224,14 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     setReviewed(false);
     setPublicPayload(null);
     setPublishState("idle");
+    setPendingTransaction(null);
+    setBackendReceipt(null);
+    setPreparedReview(null);
+    setHasPreparedTransaction(false);
+    preparedActionRef.current = null;
+    setTouchedReportFields({});
+    setTouchedFindingFields({});
+    setTouchedPrivateEvidenceFields({});
     setMessage("Example claim added. No fingerprint, wallet request or receipt was created.");
   };
 
@@ -290,6 +1246,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     setSelectedFiles([]);
     setReviewed(false);
     setPublicPayload(null);
+    setPreparedReview(null);
+    setHasPreparedTransaction(false);
+    preparedActionRef.current = null;
     setMessage("Private evidence cleared from this browser form.");
   };
 
@@ -302,6 +1261,17 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     setReviewed(false);
     setPublicPayload(null);
     setPublishState("idle");
+    setPendingTransaction(null);
+    setBackendReceipt(null);
+    setPreparedReview(null);
+    setHasPreparedTransaction(false);
+    setTechnicalError(null);
+    setContinuationLinkPath(null);
+    setTouchedReportFields({});
+    setTouchedFindingFields({});
+    setTouchedPrivateEvidenceFields({});
+    preparedActionRef.current = null;
+    approvalInFlightRef.current = false;
     setMessage(null);
   };
 
@@ -342,10 +1312,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       setMessage("Generate the seal and approve the public claim first.");
       return;
     }
-    const token = randomToken();
-    const payload = {
-      expiresAt: new Date(Date.now() + 1000 * 60 * 20).toISOString(),
+    const continuation = await createBackendContinuation({
       publicPayload,
+      publicClaim: publicClaimFromDraft(draft),
       seal: {
         claimIdentifier: seal.claimIdentifier,
         researcherFingerprint: seal.researcherFingerprint,
@@ -353,10 +1322,179 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         canonicalClaimHash: seal.canonicalClaimHash,
         privateEvidenceDigest: seal.privateEvidenceDigest,
       },
-    };
-    window.sessionStorage.setItem(`zeroseal:continuation:${token}`, JSON.stringify(payload));
-    setContinuationToken(token);
-    setMessage("Desktop continuation link created. It contains only approved public claim data.");
+    });
+    setContinuationLinkPath(continuation.linkPath);
+    setMessage("Desktop continuation link created. It contains only approved public claim data and expires in 20 minutes.");
+  };
+
+  const preserveSignedTransaction = (transaction: PendingTransaction) => {
+    setPendingTransaction(transaction);
+    persistReceipt({
+      schemaVersion: 2,
+      network: "TESTNET",
+      action: "submit_claim",
+      status: "confirmed",
+      transactionHash: transaction.transactionHash,
+      ledger: transaction.ledger,
+      account: address ?? "",
+      sourceAccount: address ?? "",
+      contractId: transaction.review.contractId,
+      verifierContractId,
+      contractFunction: "submit_claim",
+      commitment: transaction.review.researcherCommitment,
+      nullifier: transaction.review.nullifier,
+      receiptId: transaction.payload.claimIdentifier,
+      confirmedAt: null,
+      savedAt: new Date().toISOString(),
+    });
+    setDraft((current) => ({
+      ...current,
+      receipt: {
+        transactionHash: transaction.transactionHash,
+        ledger: transaction.ledger,
+      },
+    }));
+  };
+
+  const syncBackendTransaction = async (transaction: PendingTransaction) => {
+    if (!address) {
+      throw new Error("Reconnect the original Testnet wallet before retrying backend sync.");
+    }
+
+    setPublishState("confirming");
+    setMessage("Transaction hash preserved. Waiting for backend reconciliation and Testnet confirmation.");
+
+    await recordBackendTransaction(transaction.claimId, {
+      transactionHash: transaction.transactionHash,
+      walletAddress: address,
+      network: "TESTNET",
+      contractId: transaction.review.contractId,
+      method: "submit_claim",
+      operationType: "claim_submission",
+      researcherCommitment: transaction.review.researcherCommitment,
+      claimCommitment: transaction.review.claimCommitment,
+      nullifier: transaction.review.nullifier,
+      idempotencyKey: `submit_claim:${transaction.transactionHash}`,
+    });
+
+    let transactionRecord = await getBackendTransaction(transaction.transactionHash);
+    for (let attempt = 0; attempt < 24 && transactionRecord.status !== "CONFIRMED"; attempt += 1) {
+      if (transactionRecord.status === "FAILED") {
+        throw new Error("Stellar Testnet reported the transaction as failed. No receipt was issued.");
+      }
+      await sleep(2500);
+      transactionRecord = await getBackendTransaction(transaction.transactionHash);
+    }
+
+    if (transactionRecord.status !== "CONFIRMED") {
+      throw new Error("ZeroSeal recorded the transaction hash, but confirmation is still pending. Retry backend sync.");
+    }
+
+    setPublishState("issuing_receipt");
+    setMessage("Testnet confirmation found. Issuing the ZeroSeal receipt.");
+
+    let receipt: ApiReceipt | null = null;
+    for (let attempt = 0; attempt < 12 && !receipt; attempt += 1) {
+      try {
+        receipt = await getBackendClaimReceipt(transaction.claimId);
+      } catch {
+        await sleep(2000);
+      }
+    }
+
+    if (!receipt) {
+      throw new Error("The transaction is confirmed, but the backend receipt is not available yet. Retry backend sync.");
+    }
+
+    setBackendReceipt(receipt);
+    setDraft((current) => ({
+      ...current,
+      state: "RECEIPT_ISSUED",
+      receipt: {
+        transactionHash: receipt.transactionHash,
+        ledger: String(receipt.ledgerNumber),
+      },
+    }));
+    setPublishState("confirmed");
+    setMessage("Receipt ready. ZeroSeal verified the backend record and confirmed Stellar ledger.");
+  };
+
+  const approvePreparedTransaction = async () => {
+    const prepared = preparedActionRef.current;
+    if (!prepared) {
+      setPublishState("failed");
+      setMessage("Prepare the stamp again before opening Freighter.");
+      return;
+    }
+
+    if (approvalInFlightRef.current) {
+      return;
+    }
+    approvalInFlightRef.current = true;
+    let signedTransactionForRetry: PendingTransaction | null = null;
+
+    try {
+      setPublishState("awaiting_wallet");
+      setMessage("Waiting for Freighter. Rejecting the request will not submit a transaction.");
+
+      const signed = await signPreparedXdr({
+        signableXdr: prepared.signableXdr,
+        walletAddress: prepared.review.wallet,
+        networkPassphrase: prepared.networkPassphrase,
+      });
+      setPublishState("signed");
+      setMessage("Stamp signed. Submitting the signed transaction to Stellar Testnet.");
+
+      const response = await submitSignedXdr({
+        signedTxXdr: signed.signedTxXdr,
+        networkPassphrase: prepared.networkPassphrase,
+        rpcUrl: prepared.rpcUrl,
+      });
+      setPublishState("submitted");
+      const hash = extractTransactionHash(response);
+      const ledger = extractLedger(response);
+
+      if (!hash) {
+        setPublishState("failed");
+        update({ state: "FAILED" });
+        setMessage("Freighter returned no confirmed transaction hash.");
+        return;
+      }
+
+      const signedTransaction = {
+        claimId: prepared.claim.id,
+        transactionHash: hash,
+        ledger,
+        payload: prepared.payload,
+        review: prepared.review,
+      };
+      signedTransactionForRetry = signedTransaction;
+      preserveSignedTransaction(signedTransaction);
+      preparedActionRef.current = null;
+      setPreparedReview(null);
+      setHasPreparedTransaction(false);
+      setMessage(`Stamp submitted. Hash preserved: ${hash}. Syncing ZeroSeal receipt now.`);
+      await syncBackendTransaction(signedTransaction);
+      setStep(4);
+    } catch (error) {
+      if (isWalletApprovalFailure(error)) {
+        setPublishState("wallet_retry");
+        setMessage(errorMessage(error));
+        return;
+      }
+      const retryableTransaction = signedTransactionForRetry ?? pendingTransaction;
+      if (retryableTransaction) {
+        setPendingTransaction(retryableTransaction);
+        setPublishState("backend_sync_failed");
+        setMessage(error instanceof Error ? error.message : "Backend sync could not be completed. Retry backend sync.");
+        return;
+      }
+      setPublishState("failed");
+      update({ state: "FAILED" });
+      setMessage(signedTransactionMessage(error));
+    } finally {
+      approvalInFlightRef.current = false;
+    }
   };
 
   const publish = async () => {
@@ -364,17 +1502,42 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       setMessage("Generate the private seal before publishing.");
       return;
     }
+
+    if ((publishState === "reviewing" || publishState === "wallet_retry") && preparedActionRef.current) {
+      await approvePreparedTransaction();
+      return;
+    }
+
+    if (publishState === "backend_sync_failed" && pendingTransaction) {
+      try {
+        await assertBackendReady();
+        await syncBackendTransaction(pendingTransaction);
+      } catch (error) {
+        setPublishState("backend_sync_failed");
+        setMessage(error instanceof Error ? error.message : "Backend sync could not be completed. Retry backend sync.");
+      }
+      return;
+    }
+
     if (!address) {
       setMessage("Connect Freighter on Stellar Testnet before publishing.");
       await connect();
       return;
     }
 
-    setPublishState("preparing");
+    setPublishState("checking_readiness");
     update({ state: nextClaimState("PUBLIC_CLAIM_REVIEWED", "requestWallet") });
-    setMessage("Preparing the Claim Registry action.");
+    setMessage("Checking backend readiness before opening Freighter.");
+    setTechnicalError(null);
+    setPreparedReview(null);
+    setHasPreparedTransaction(false);
+    preparedActionRef.current = null;
 
     try {
+      await assertBackendReady();
+      setPublishState("preparing");
+      setMessage("Preparing the Claim Registry action.");
+
       const payload = await buildPublicPayloadAsync(draft, seal, {
         researcherPublicKey: address,
       });
@@ -393,69 +1556,63 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         }));
       setBackendClaim(claim);
 
+      const runtimeConfig = readClaimRegistryRuntimeConfig();
       const client = await createClaimRegistryClient(address);
-      const transaction = await client.register_researcher({
+      const transaction = await client.submit_claim({
         researcher: address,
         researcher_commitment: Buffer.from(seal.researcherFingerprint, "hex"),
+        claim_commitment: Buffer.from(seal.canonicalClaimHash, "hex"),
+        nullifier: Buffer.from(seal.nullifier, "hex"),
       });
+      const signableXdr = transaction.toXDR();
+      const decoded = decodeSubmitClaimArgsFromXdr(signableXdr);
+      const fee = feeDisplayFromXdr(signableXdr, runtimeConfig.networkPassphrase);
+      const review: PreparedReview = {
+        wallet: decoded.researcher,
+        contractId: decoded.contractId,
+        method: decoded.method,
+        researcherCommitment: decoded.researcherCommitment,
+        claimCommitment: decoded.claimCommitment,
+        nullifier: decoded.nullifier,
+        simulatedFee: simulatedFee(transaction),
+        feeStroops: fee.stroops,
+        feeXlm: fee.xlm,
+        signableXdr,
+      };
 
-      setPublishState("awaiting");
-      setMessage("Review the exact Testnet transaction in Freighter.");
-
-      const response = await transaction.signAndSend();
-      setPublishState("submitting");
-      const hash = extractTransactionHash(response);
-      const ledger = extractLedger(response);
-
-      if (!hash) {
-        setPublishState("failed");
-        update({ state: "FAILED" });
-        setMessage("Freighter returned no confirmed transaction hash.");
-        return;
+      if (
+        review.wallet !== address ||
+        review.contractId !== registryContractId ||
+        review.researcherCommitment !== seal.researcherFingerprint ||
+        review.claimCommitment !== seal.canonicalClaimHash ||
+        review.nullifier !== seal.nullifier
+      ) {
+        throw new Error("Stamp preparation failed. Signable XDR does not match the reviewed public commitments.");
       }
 
-      await recordBackendTransaction(claim.id, {
-        transactionHash: hash,
-        walletAddress: address,
-        network: "TESTNET",
-        contractId: registryContractId,
-        method: "register_researcher",
-        operationType: "researcher_registration",
-        researcherCommitment: seal.researcherFingerprint,
-        idempotencyKey: `register:${hash}`,
-      });
-
-      persistReceipt({
-        schemaVersion: 2,
-        network: "TESTNET",
-        action: "register_researcher",
-        status: "confirmed",
-        transactionHash: hash,
-        ledger,
-        account: address,
-        sourceAccount: address,
-        contractId: registryContractId,
-        verifierContractId,
-        contractFunction: "register_researcher",
-        commitment: seal.researcherFingerprint,
-        nullifier: seal.nullifier,
-        receiptId: payload.claimIdentifier,
-        confirmedAt: null,
-        savedAt: new Date().toISOString(),
-      });
-
-      setDraft((current) => ({
-        ...current,
-        state: "RECEIPT_ISSUED",
-        receipt: { transactionHash: hash, ledger },
-      }));
-      setPublishState("confirmed");
-      setMessage("Confirmed on Stellar Testnet. Public receipt is ready.");
-      setStep(4);
+      preparedActionRef.current = {
+        claim,
+        payload,
+        review,
+        signableXdr,
+        networkPassphrase: runtimeConfig.networkPassphrase,
+        rpcUrl: runtimeConfig.rpcUrl,
+      };
+      setHasPreparedTransaction(true);
+      setPreparedReview(review);
+      setPublishState("reviewing");
+      setMessage(`Stamp ready: contract ${registryContractId}, method submit_claim, wallet ${address}. Private evidence is excluded. Approve stamp in Freighter only if these details match.`);
+      return;
     } catch (error) {
+      setTechnicalError(errorMessage(error));
+      if (pendingTransaction) {
+        setPublishState("backend_sync_failed");
+        setMessage(error instanceof Error ? error.message : "Backend sync could not be completed. Retry backend sync.");
+        return;
+      }
       setPublishState("failed");
       update({ state: "FAILED" });
-      setMessage(error instanceof Error ? error.message : "Publish failed.");
+      setMessage(signedTransactionMessage(error));
     }
   };
 
@@ -523,13 +1680,59 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
               />
               <ReportingPathSelector
                 value={draft.reportingContext}
-                onChange={(value) => update({ reportingContext: value })}
+                onChange={(value) => {
+                  markReportFieldTouched("reportingContext");
+                  update({ reportingContext: value });
+                }}
+                onBlur={() => markReportFieldTouched("reportingContext")}
+                error={reportFieldError("reportingContext")}
               />
               <div className="claim-fields claim-fields--compact">
-                <Field label="Programme or project" value={draft.programmeName} onChange={(value) => update({ programmeName: value })} hint="Example: Example Vault Programme or the protocol name" />
-                <Field label="Target name" value={draft.affectedComponent} onChange={(value) => update({ affectedComponent: value })} hint="Example: Vault.sol, withdraw(), payments API or mobile app" />
-                <SelectField label="Target type" value={draft.targetType} options={TARGET_TYPES} onChange={(value) => update({ targetType: value })} hint="Example: smart contract, repository, API or web application" />
-                <Field label="Repository or contract address" value={draft.targetLocator} onChange={(value) => update({ targetLocator: value })} hint="Example: repository URL or deployed contract address" />
+                <Field
+                  label="Programme or project"
+                  value={draft.programmeName}
+                  onChange={(value) => {
+                    markReportFieldTouched("programmeName");
+                    update({ programmeName: value });
+                  }}
+                  onBlur={() => markReportFieldTouched("programmeName")}
+                  hint="Example: Example Vault Programme or the protocol name"
+                  error={reportFieldError("programmeName")}
+                />
+                <Field
+                  label="Target name"
+                  value={draft.affectedComponent}
+                  onChange={(value) => {
+                    markReportFieldTouched("affectedComponent");
+                    update({ affectedComponent: value });
+                  }}
+                  onBlur={() => markReportFieldTouched("affectedComponent")}
+                  hint="Example: Vault.sol, withdraw(), payments API or mobile app"
+                  error={reportFieldError("affectedComponent")}
+                />
+                <SelectField
+                  label="Target type"
+                  value={draft.targetType}
+                  options={TARGET_TYPES}
+                  onChange={(value) => {
+                    markReportFieldTouched("targetType");
+                    update({ targetType: value });
+                  }}
+                  onBlur={() => markReportFieldTouched("targetType")}
+                  hint="Example: smart contract, repository, API or web application"
+                  error={reportFieldError("targetType")}
+                />
+                <Field
+                  label="Repository or contract address"
+                  value={draft.targetLocator}
+                  onChange={(value) => {
+                    markReportFieldTouched("targetLocator");
+                    update({ targetLocator: value });
+                  }}
+                  onBlur={() => markReportFieldTouched("targetLocator")}
+                  hint="Example: repository URL or deployed contract address"
+                  error={reportFieldError("targetLocator")}
+                />
               </div>
             </section>
           ) : null}
@@ -540,18 +1743,62 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 title="Finding"
                 text="Use the public-facing description of the claim. Sensitive mechanics stay in private evidence."
               />
-              <div className="claim-fields claim-fields--compact">
-                <Field label="Public title" value={draft.findingTitle} onChange={(value) => update({ findingTitle: value })} />
-                <Field label="Category" value={draft.bugCategory} onChange={(value) => update({ bugCategory: value })} />
-                <Field label="Public impact threshold" value={draft.publicClaim.publicThreshold} onChange={(value) => update({ publicClaim: { ...draft.publicClaim, publicThreshold: value } })} />
+              <div className="claim-fields claim-fields--compact claim-fields--finding">
+                <Field
+                  label="Public title"
+                  value={draft.findingTitle}
+                  onChange={(value) => {
+                    markFindingFieldTouched("findingTitle");
+                    update({ findingTitle: value });
+                  }}
+                  onBlur={() => markFindingFieldTouched("findingTitle")}
+                  hint="Example: Unauthorised withdrawal may bypass the programme limit"
+                  error={findingFieldError("findingTitle")}
+                />
+                <Field
+                  label="Category"
+                  value={draft.bugCategory}
+                  onChange={(value) => {
+                    markFindingFieldTouched("bugCategory");
+                    update({ bugCategory: value });
+                  }}
+                  onBlur={() => markFindingFieldTouched("bugCategory")}
+                  hint="Example: Access control, reentrancy, authentication bypass or arithmetic error"
+                  error={findingFieldError("bugCategory")}
+                />
+                <Field
+                  label="Public impact threshold"
+                  value={draft.publicClaim.publicThreshold}
+                  onChange={(value) => {
+                    markFindingFieldTouched("publicThreshold");
+                    update({ publicClaim: { ...draft.publicClaim, publicThreshold: value } });
+                  }}
+                  onBlur={() => markFindingFieldTouched("publicThreshold")}
+                  hint="Example: Up to 50,000 USD may be withdrawn without authorisation"
+                  error={findingFieldError("publicThreshold")}
+                />
               </div>
               <Segmented
                 label="Severity"
                 options={SEVERITIES}
                 value={draft.claimedSeverity}
-                onChange={(value) => update({ claimedSeverity: value as ClaimDraft["claimedSeverity"] })}
+                onChange={(value) => {
+                  markFindingFieldTouched("claimedSeverity");
+                  update({ claimedSeverity: value as ClaimDraft["claimedSeverity"] });
+                }}
+                error={findingFieldError("claimedSeverity")}
               />
-              <TextArea label="Short public summary" value={draft.impactStatement} onChange={(value) => update({ impactStatement: value })} />
+              <TextArea
+                label="Short public summary"
+                value={draft.impactStatement}
+                onChange={(value) => {
+                  markFindingFieldTouched("impactStatement");
+                  update({ impactStatement: value });
+                }}
+                onBlur={() => markFindingFieldTouched("impactStatement")}
+                hint="Example: An attacker may withdraw more assets than the configured programme threshold. Sensitive reproduction details remain private."
+                error={findingFieldError("impactStatement")}
+              />
             </section>
           ) : null}
 
@@ -561,19 +1808,62 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                 title="Private evidence"
                 text="Nothing on this step leaves your device."
               />
-              <div className="claim-fields claim-fields--compact">
-                <TextArea label="Private report" value={draft.privateEvidence.vulnerabilityDescription} onChange={(value) => updatePrivateEvidence("vulnerabilityDescription", value)} />
-                <TextArea label="Reproduction steps" value={draft.privateEvidence.reproductionSteps} onChange={(value) => updatePrivateEvidence("reproductionSteps", value)} />
+              <div className="privacy-callout privacy-callout--evidence">
+                <p>Stored locally for sealing. These raw values are never placed on Stellar or included in the public receipt.</p>
               </div>
-              <details className="technical-details technical-details--compact">
-                <summary>Optional private details</summary>
-                <div className="claim-fields claim-fields--compact">
-                  <TextArea label="PoC notes" value={draft.privateEvidence.proofOfConcept} onChange={(value) => updatePrivateEvidence("proofOfConcept", value)} />
-                <Field label="Private impact value" value={draft.privateEvidence.privateImpactValues} onChange={(value) => updatePrivateEvidence("privateImpactValues", value)} />
+              <div className="claim-fields claim-fields--compact claim-fields--evidence">
+                <TextArea
+                  label="Private report"
+                  value={draft.privateEvidence.vulnerabilityDescription}
+                  onChange={(value) => {
+                    markPrivateEvidenceFieldTouched("vulnerabilityDescription");
+                    updatePrivateEvidence("vulnerabilityDescription", value);
+                  }}
+                  onBlur={() => markPrivateEvidenceFieldTouched("vulnerabilityDescription")}
+                  hint="Describe the vulnerable logic, affected component, root cause and exploit conditions."
+                  error={privateEvidenceFieldError("vulnerabilityDescription")}
+                />
+                <TextArea
+                  label="Reproduction steps"
+                  value={draft.privateEvidence.reproductionSteps}
+                  onChange={(value) => {
+                    markPrivateEvidenceFieldTouched("reproductionSteps");
+                    updatePrivateEvidence("reproductionSteps", value);
+                  }}
+                  onBlur={() => markPrivateEvidenceFieldTouched("reproductionSteps")}
+                  hint="Example: 1. Deploy the affected version. 2. Create a funded test account. 3. Call withdraw() with the crafted input."
+                  error={privateEvidenceFieldError("reproductionSteps")}
+                />
               </div>
-              </details>
+              <div className="claim-subsection">
+                <h3>Additional private evidence</h3>
+                <div className="claim-fields claim-fields--compact claim-fields--evidence">
+                  <TextArea
+                    label="PoC notes"
+                    value={draft.privateEvidence.proofOfConcept}
+                    onChange={(value) => {
+                      markPrivateEvidenceFieldTouched("proofOfConcept");
+                      updatePrivateEvidence("proofOfConcept", value);
+                    }}
+                    onBlur={() => markPrivateEvidenceFieldTouched("proofOfConcept")}
+                    hint="Example: Foundry test: test_WithdrawAboveLimit(). Expected revert, but the withdrawal succeeds."
+                    error={privateEvidenceFieldError("proofOfConcept")}
+                  />
+                  <Field
+                    label="Private impact value"
+                    value={draft.privateEvidence.privateImpactValues}
+                    onChange={(value) => {
+                      markPrivateEvidenceFieldTouched("privateImpactValues");
+                      updatePrivateEvidence("privateImpactValues", value);
+                    }}
+                    onBlur={() => markPrivateEvidenceFieldTouched("privateImpactValues")}
+                    hint="Example: Potential loss: 50,000 USD from the affected vault."
+                    error={privateEvidenceFieldError("privateImpactValues")}
+                  />
+                </div>
+              </div>
               <label className="file-picker">
-                <span>Drag files here or choose files</span>
+                <span>Optional attachments</span>
                 <input
                   type="file"
                   multiple
@@ -672,49 +1962,111 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
               />
               {draft.receipt?.transactionHash ? (
                 <div className="claim-receipt">
+                  <div className="receipt-badge">Confirmed</div>
                   <dl>
-                    <div><dt>Claim identifier</dt><dd>{publicPayload?.claimIdentifier ?? seal?.claimIdentifier}</dd></div>
-                    <div><dt>Researcher fingerprint</dt><dd className="mono">{formatFingerprint(seal?.researcherFingerprint)}</dd></div>
-                    <div><dt>Transaction hash</dt><dd className="mono">{draft.receipt.transactionHash}</dd></div>
+                    <div><dt>Claim identifier</dt><dd><CopyableValue value={publicPayload?.claimIdentifier ?? seal?.claimIdentifier ?? ""} /></dd></div>
+                    <div><dt>Researcher commitment</dt><dd><CopyableValue value={seal?.researcherFingerprint ?? ""} /></dd></div>
+                    <div><dt>Transaction hash</dt><dd><CopyableValue value={draft.receipt.transactionHash} /></dd></div>
                     <div><dt>Ledger</dt><dd>{draft.receipt.ledger ?? "Confirmed, ledger unavailable"}</dd></div>
-                    <div><dt>Registry contract</dt><dd className="mono">{registryContractId}</dd></div>
-                    <div><dt>Verifier contract</dt><dd className="mono">{verifierContractId}</dd></div>
+                    {backendReceipt ? (
+                      <div><dt>Receipt ID</dt><dd><CopyableValue value={backendReceipt.receiptId} /></dd></div>
+                    ) : null}
+                    <div><dt>Wallet</dt><dd><CopyableValue value={address ?? ""} /></dd></div>
+                    <div><dt>Registry contract</dt><dd><CopyableValue value={registryContractId} /></dd></div>
                   </dl>
                   <div className="claim-step__actions">
                     <Link className="btn btn--primary btn--sm" href={`/receipt/${draft.receipt.transactionHash}`}>Open receipt page</Link>
                     <a className="btn btn--outline btn--sm" href={explorerTransactionUrl(draft.receipt.transactionHash)} target="_blank" rel="noreferrer">Open Stellar explorer</a>
+                    {backendReceipt ? (
+                      <Link className="btn btn--outline btn--sm" href={verifyReceiptHref(backendReceipt.receiptId)}>Verify this receipt</Link>
+                    ) : null}
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="publish-summary">
-                    <div>
-                      <span>Recorded on Testnet</span>
-                      <strong>Researcher fingerprint and registry action</strong>
-                    </div>
-                    <div>
-                      <span>Never recorded</span>
-                      <strong>Raw evidence, PoC, private files, salts or witness values</strong>
-                    </div>
-                    <div>
-                      <span>Wallet</span>
-                      <strong>{address ? "Connected" : status === "wrong_network" ? "Wrong network" : "Not connected"}</strong>
-                    </div>
+                  <div className="transaction-readiness" aria-label="Transaction readiness">
+                    <StatusPill label="Seal ready" active={Boolean(seal)} />
+                    <StatusPill label="Public claim approved" active={reviewed} />
+                    <StatusPill label="Wallet connected" active={Boolean(address)} />
+                    <StatusPill label="Stellar Testnet" active={status !== "wrong_network"} />
+                    <StatusPill label="Private evidence excluded" active />
                   </div>
+                  {preparedReview ? (
+                    <div className="transaction-review" role="status" aria-live="polite">
+                      <div>
+                        <span>Method</span>
+                        <strong>{preparedReview.method}</strong>
+                      </div>
+                      <div>
+                        <span>Registry contract</span>
+                        <CopyableValue value={preparedReview.contractId} />
+                      </div>
+                      <div>
+                        <span>Connected wallet</span>
+                        <CopyableValue value={preparedReview.wallet} />
+                      </div>
+                      <div>
+                        <span>Researcher commitment</span>
+                        <CopyableValue value={preparedReview.researcherCommitment} />
+                      </div>
+                      <div>
+                        <span>Claim commitment</span>
+                        <CopyableValue value={preparedReview.claimCommitment} />
+                      </div>
+                      <div>
+                        <span>Nullifier</span>
+                        <CopyableValue value={preparedReview.nullifier} />
+                      </div>
+                      <div>
+                        <span>Network</span>
+                        <strong>Stellar Testnet</strong>
+                      </div>
+                      <div>
+                        <span>Maximum network fee</span>
+                        <strong>{preparedReview.feeXlm} XLM</strong>
+                        <strong>{preparedReview.feeStroops} stroops</strong>
+                      </div>
+                      <div>
+                        <span>Signable XDR</span>
+                        <strong>{preparedReview.signableXdr ? "Created" : "Missing"}</strong>
+                      </div>
+                      <div>
+                        <span>Excluded</span>
+                        <strong>Private evidence, PoC, files, salts and witness values</strong>
+                      </div>
+                    </div>
+                  ) : null}
+                  {!preparedReview ? (
+                    <div className="transaction-review transaction-review--empty">
+                      <div>
+                        <span>Stamp review</span>
+                        <strong>Prepare stamp to create a signable XDR.</strong>
+                      </div>
+                      <div>
+                        <span>Private fields excluded</span>
+                        <strong>Raw evidence, PoC, private files, salts and witness values</strong>
+                      </div>
+                    </div>
+                  ) : null}
                   {mobileSigning ? (
                     <div className="mobile-handoff">
-                      <strong>Continue signing on desktop</strong>
-                      <p>Freighter extension signing is available on desktop. This continuation contains only the approved public claim and expires in 20 minutes.</p>
+                      <strong>Continue securely on desktop</strong>
+                      <p>Freighter approval is not available in this mobile browser. Continue securely on desktop without publishing your private evidence.</p>
+                      <p>This continuation contains only the approved public claim state and expires in 20 minutes. Raw reports, PoC notes, private files, salts and witness values stay off the continuation link.</p>
                       <button className="btn btn--primary btn--sm" type="button" onClick={() => void createContinuation()}>
-                        Create desktop continuation
+                        Continue securely on desktop
                       </button>
-                      {continuationToken ? (
+                      {continuationLinkPath ? (
                         <div className="mobile-handoff__link">
-                          <code>{`${typeof window !== "undefined" ? window.location.origin : ""}/create?continue=${continuationToken}`}</code>
+                          <div className="mobile-handoff__qr" aria-label="Desktop continuation QR code">
+                            <span className="mobile-handoff__qr-mark" aria-hidden="true" />
+                            <p>Open this link on a desktop browser with Freighter unlocked on Stellar Testnet.</p>
+                          </div>
+                          <code>{desktopContinuationUrl(continuationLinkPath, typeof window !== "undefined" ? window.location.origin : undefined)}</code>
                           <button
                             className="btn btn--outline btn--sm"
                             type="button"
-                            onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/create?continue=${continuationToken}`)}
+                            onClick={() => navigator.clipboard?.writeText(desktopContinuationUrl(continuationLinkPath, window.location.origin))}
                           >
                             Copy desktop continuation link
                           </button>
@@ -723,12 +2075,12 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                     </div>
                   ) : (
                     <div className="claim-step__actions">
-                      <button className="btn btn--outline btn--sm" type="button" onClick={() => void connect()}>
-                        Connect Freighter
+                      <button className="btn btn--primary btn--sm" type="button" disabled={publishAction.disabled} onClick={() => void publish()}>
+                        {publishAction.label}
                       </button>
-                      <button className="btn btn--primary btn--sm" type="button" disabled={!reviewed || publishState === "awaiting" || publishState === "submitting"} onClick={() => void publish()}>
-                        {publishState === "awaiting" ? "Approve in Freighter" : "Review Testnet action"}
-                      </button>
+                      {publishAction.reason ? (
+                        <span className="claim-action-hint">{publishAction.reason}</span>
+                      ) : null}
                     </div>
                   )}
                 </>
@@ -736,7 +2088,17 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
             </section>
           ) : null}
 
-          {message ? <p className="claim-flow__message" aria-live="polite">{message}</p> : null}
+          {message ? (
+            <div className="claim-flow__message" aria-live="polite">
+              <p>{message}</p>
+              {technicalError ? (
+                <details className="technical-details">
+                  <summary>Technical details</summary>
+                  <p>{technicalError}</p>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
 
           <footer className="claim-flow__nav claim-flow__nav--compact">
             <button className="btn btn--outline btn--sm" type="button" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
@@ -746,9 +2108,14 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
               Reset
             </button>
             {step < 4 ? (
-              <button className="btn btn--primary btn--sm" type="button" disabled={!ready} onClick={continueStep}>
-                Continue
-              </button>
+              <div className="claim-flow__continue">
+                <button className="btn btn--primary btn--sm" type="button" disabled={!ready} onClick={continueStep}>
+                  Continue
+                </button>
+                {!ready && continueReason ? (
+                  <span className="claim-action-hint">{continueReason}</span>
+                ) : null}
+              </div>
             ) : null}
           </footer>
         </main>
@@ -766,22 +2133,73 @@ function StepHeader({ title, text }: { title: string; text: string }) {
   );
 }
 
+function StatusPill({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span className="status-pill" data-active={active}>
+      {label}
+    </span>
+  );
+}
+
+function CopyableValue({ value }: { value: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const displayValue = expanded ? value : shortenLongValue(value);
+
+  if (!value) {
+    return <strong>Unavailable</strong>;
+  }
+
+  return (
+    <span className="copyable-value">
+      <code title={value}>{displayValue}</code>
+      <span>
+        <button
+          type="button"
+          onClick={() => navigator.clipboard?.writeText(value)}
+        >
+          Copy
+        </button>
+        <button type="button" onClick={() => setExpanded((current) => !current)}>
+          {expanded ? "Shorten" : "Expand"}
+        </button>
+      </span>
+    </span>
+  );
+}
+
+function shortenLongValue(value: string): string {
+  if (value.length <= 24) {
+    return value;
+  }
+  return `${value.slice(0, 10)}...${value.slice(-10)}`;
+}
+
 function Field({
   label,
   value,
   onChange,
+  onBlur,
   hint,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   hint?: string;
+  error?: string | null;
 }) {
   return (
     <label>
       <span>{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={Boolean(error)}
+      />
       {hint ? <em className="field-hint">{hint}</em> : null}
+      <ReportStepValidationMessage message={error ?? null} />
     </label>
   );
 }
@@ -790,15 +2208,28 @@ function TextArea({
   label,
   value,
   onChange,
+  onBlur,
+  hint,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
+  hint?: string;
+  error?: string | null;
 }) {
   return (
     <label>
       <span>{label}</span>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} />
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={Boolean(error)}
+      />
+      {hint ? <em className="field-hint">{hint}</em> : null}
+      <ReportStepValidationMessage message={error ?? null} />
     </label>
   );
 }
@@ -808,24 +2239,34 @@ function SelectField({
   value,
   options,
   onChange,
+  onBlur,
   hint,
+  error,
 }: {
   label: string;
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
+  onBlur?: () => void;
   hint?: string;
+  error?: string | null;
 }) {
   return (
     <label>
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={Boolean(error)}
+      >
         <option value="">Choose one</option>
         {options.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
       </select>
       {hint ? <em className="field-hint">{hint}</em> : null}
+      <ReportStepValidationMessage message={error ?? null} />
     </label>
   );
 }
@@ -835,11 +2276,13 @@ function Segmented({
   options,
   value,
   onChange,
+  error,
 }: {
   label: string;
   options: readonly string[];
   value: string;
   onChange: (value: string) => void;
+  error?: string | null;
 }) {
   return (
     <fieldset className="severity-control">
@@ -856,125 +2299,48 @@ function Segmented({
           </button>
         ))}
       </div>
+      <ReportStepValidationMessage message={error ?? null} />
     </fieldset>
   );
 }
 
-function PathMark({ logo, label }: { logo?: string; label: string }) {
-  if (logo) {
-    return (
-      <span className="path-select__logo">
-        <Image src={logo} alt="" aria-hidden="true" width={88} height={24} unoptimized />
-      </span>
-    );
-  }
-  return (
-    <span className="path-select__mark" aria-hidden="true">
-      {label.charAt(0)}
-    </span>
-  );
-}
-
-function ReportingPathSelector({
+export function ReportingPathSelector({
   value,
   onChange,
+  onBlur,
+  error,
 }: {
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
+  error?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-
   const selected =
     REPORTING_CONTEXTS.find((context) => context.label === value) ?? null;
 
-  const results = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) {
-      return REPORTING_CONTEXTS;
-    }
-    return REPORTING_CONTEXTS.filter(
-      (context) =>
-        context.label.toLowerCase().includes(term) ||
-        context.category.toLowerCase().includes(term),
-    );
-  }, [query]);
-
-  const choose = (label: string) => {
-    onChange(label);
-    setOpen(false);
-    setQuery("");
-  };
-
   return (
-    <div className="path-select" data-open={open}>
-      <span className="path-select__label">Reporting path</span>
-      <button
-        type="button"
-        className="path-select__trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+    <label className="reporting-path-field">
+      <span>Reporting path</span>
+      <select
+        className="reporting-path-select"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={Boolean(error)}
       >
-        {selected ? (
-          <>
-            <PathMark logo={"logo" in selected ? selected.logo : undefined} label={selected.label} />
-            <span className="path-select__trigger-text">
-              <strong>{selected.label}</strong>
-              <small>{selected.category}</small>
-            </span>
-          </>
-        ) : (
-          <span className="path-select__trigger-text">
-            <strong>Select a reporting path</strong>
-            <small>Where the full report will eventually be handled</small>
-          </span>
-        )}
-        <svg className="path-select__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M6 9 L12 15 L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-
-      {open ? (
-        <div className="path-select__panel" role="listbox" aria-label="Reporting paths">
-          <input
-            className="path-select__search"
-            type="text"
-            value={query}
-            autoFocus
-            placeholder="Search platforms"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <ul className="path-select__options">
-            {results.length === 0 ? (
-              <li className="path-select__empty">No matching reporting paths.</li>
-            ) : (
-              results.map((context) => (
-                <li key={context.label}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={context.label === value}
-                    data-selected={context.label === value}
-                    onClick={() => choose(context.label)}
-                  >
-                    <PathMark logo={"logo" in context ? context.logo : undefined} label={context.label} />
-                    <span className="path-select__option-text">
-                      <strong>{context.label}</strong>
-                      <small>{context.category}</small>
-                    </span>
-                    {context.label === value ? (
-                      <svg className="path-select__tick" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M5 12.5 L10 17.5 L19 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : null}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      ) : null}
-    </div>
+        <option value="">Select a reporting path</option>
+        {REPORTING_CONTEXTS.map((context) => (
+          <option key={context.label} value={context.label}>
+            {context.label}
+          </option>
+        ))}
+      </select>
+      <small>
+        {selected
+          ? selected.category
+          : "Where the full report will eventually be handled"}
+      </small>
+      <ReportStepValidationMessage message={error ?? null} />
+    </label>
   );
 }

@@ -5,6 +5,15 @@ import { PrismaService } from "./prisma.service";
 import { checkRedisReady, checkStellarRpcReady } from "./readiness";
 import { CONFIG } from "./tokens";
 
+export type WorkerReadiness = "not_required" | "ready" | "unavailable";
+
+export function getWorkerReadiness(config: Pick<ApiConfig, "RUN_EMBEDDED_WORKER" | "WORKER_REQUIRED_FOR_READY">): WorkerReadiness {
+  if (config.RUN_EMBEDDED_WORKER) {
+    return "ready";
+  }
+  return config.WORKER_REQUIRED_FOR_READY ? "unavailable" : "not_required";
+}
+
 @Controller()
 export class HealthController {
   constructor(
@@ -28,7 +37,7 @@ export class HealthController {
       database: "unknown",
       redis: "optional" as "optional" | "ready" | "unavailable",
       stellarRpc: "unknown",
-      worker: this.config.RUN_EMBEDDED_WORKER ? "embedded" : "disabled",
+      worker: getWorkerReadiness(this.config),
     };
 
     try {
@@ -64,6 +73,14 @@ export class HealthController {
       throw new ServiceUnavailableException({
         code: "SERVICE_DEPENDENCY_UNAVAILABLE",
         message: "Stellar RPC is not ready.",
+        checks,
+      });
+    }
+
+    if (checks.worker === "unavailable") {
+      throw new ServiceUnavailableException({
+        code: "SERVICE_DEPENDENCY_UNAVAILABLE",
+        message: "Worker is required for transaction reconciliation but is not running.",
         checks,
       });
     }

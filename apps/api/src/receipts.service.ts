@@ -49,7 +49,7 @@ export class ReceiptsService {
       throw new ApiError("RECEIPT_NOT_READY", "Receipt is pending real transaction confirmation.", 409);
     }
 
-    const isRegistryReceipt = transaction.method === "register_researcher";
+    const isRegistryReceipt = transaction.method === "submit_claim";
     const structural = claim.verificationResults.find(
       (result) => result.status === VerificationResultStatus.PASSED,
     );
@@ -138,24 +138,181 @@ export class ReceiptsService {
   }
 
   async getByReceiptId(receiptId: string) {
-    const receipt = await this.prisma.claimReceipt.findUnique({
-      where: { receiptId },
-    });
+    return this.getByIdentifier(receiptId);
+  }
+
+  async getByIdentifier(identifier: string) {
+    const parsed = classifyReceiptIdentifier(identifier);
+    let receipt: PublicReceiptModel | null = null;
+
+    if (parsed.kind === "receiptId") {
+      receipt = await this.prisma.claimReceipt.findUnique({
+        where: { receiptId: parsed.value },
+        include: publicReceiptInclude,
+      });
+    } else if (parsed.kind === "transactionHash") {
+      receipt = await this.prisma.claimReceipt.findFirst({
+        where: { transactionHash: parsed.value },
+        include: publicReceiptInclude,
+      });
+    } else if (parsed.kind === "uuid") {
+      receipt = await this.prisma.claimReceipt.findFirst({
+        where: {
+          OR: [
+            { id: parsed.value },
+            { claimId: parsed.value },
+          ],
+        },
+        include: publicReceiptInclude,
+      });
+    } else {
+      throw new ApiError(
+        "INVALID_RECEIPT_IDENTIFIER",
+        "Enter a valid ZeroSeal receipt ID, claim ID or Stellar transaction hash.",
+        400,
+      );
+    }
+
     if (!receipt) {
       throw new ApiError("RECEIPT_NOT_FOUND", "Receipt not found.", 404);
     }
-    return receipt;
+    return serializePublicReceipt(receipt);
   }
 
   async getForClaim(claimId: string) {
     const receipt = await this.prisma.claimReceipt.findUnique({
       where: { claimId },
+      include: publicReceiptInclude,
     });
     if (!receipt) {
       throw new ApiError("RECEIPT_PENDING", "Receipt has not been issued.", 404);
     }
-    return receipt;
+    return serializePublicReceipt(receipt);
   }
+
+  async listPublicReceipts() {
+    const receipts = await this.prisma.claimReceipt.findMany({
+      where: {
+        transaction: {
+          status: ChainTransactionStatus.CONFIRMED,
+          method: "submit_claim",
+        },
+      },
+      include: publicReceiptInclude,
+      orderBy: { issuedAt: "desc" },
+      take: 25,
+    });
+
+    return receipts.map(serializePublicReceipt);
+  }
+}
+
+const publicReceiptInclude = {
+  claim: {
+    include: {
+      publicInputs: { orderBy: { position: "asc" } },
+    },
+  },
+  transaction: true,
+} as const;
+
+type PublicReceiptModel = {
+  receiptId: string;
+  claimId: string;
+  transactionHash: string;
+  ledgerNumber: number;
+  registryContract: string;
+  verifierContract: string;
+  network: string;
+  walletAddress: string;
+  researcherCommitment: string;
+  nullifier: string | null;
+  policyIdentifier: string;
+  issuedAt: Date | string;
+  explorerTransactionUrl: string;
+  explorerAccountUrl: string;
+  explorerRegistryUrl: string;
+  explorerVerifierUrl: string;
+  claim?: {
+    publicInputs?: Array<{
+      name: string;
+      valueHex: string;
+    }>;
+  };
+  transaction?: {
+    method?: string | null;
+    status?: string | null;
+  };
+};
+
+type ReceiptIdentifier =
+  | { kind: "receiptId"; value: string }
+  | { kind: "transactionHash"; value: string }
+  | { kind: "uuid"; value: string }
+  | { kind: "unknown"; value: string };
+
+function classifyReceiptIdentifier(input: string): ReceiptIdentifier {
+  const value = extractIdentifier(input).trim();
+
+  if (/^zs_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
+    return { kind: "receiptId", value };
+  }
+
+  if (/^[0-9a-fA-F]{64}$/.test(value)) {
+    return { kind: "transactionHash", value: value.toLowerCase() };
+  }
+
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value)) {
+    return { kind: "uuid", value: value.toLowerCase() };
+  }
+
+  return { kind: "unknown", value };
+}
+
+function extractIdentifier(input: string): string {
+  try {
+    const parsed = new URL(input);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    return parts[parts.length - 1] ?? input;
+  } catch {
+    return input;
+  }
+}
+
+function serializePublicReceipt(receipt: PublicReceiptModel) {
+  const claimCommitment =
+    receipt.claim?.publicInputs?.find((input) => input.name === "claim_commitment")
+      ?.valueHex ?? null;
+  const method = receipt.transaction?.method ?? "submit_claim";
+
+  return {
+    receiptId: receipt.receiptId,
+    claimId: receipt.claimId,
+    transactionHash: receipt.transactionHash,
+    ledgerNumber: receipt.ledgerNumber,
+    registryContract: receipt.registryContract,
+    verifierContract: receipt.verifierContract,
+    network: receipt.network,
+    walletAddress: receipt.walletAddress,
+    researcherCommitment: receipt.researcherCommitment,
+    claimCommitment,
+    nullifier: receipt.nullifier,
+    policyIdentifier: receipt.policyIdentifier,
+    issuedAt:
+      receipt.issuedAt instanceof Date
+        ? receipt.issuedAt.toISOString()
+        : new Date(receipt.issuedAt).toISOString(),
+    method,
+    actionLabel:
+      method === "submit_claim"
+        ? "Claim stamped"
+        : "Legacy researcher registration",
+    status: "CONFIRMED",
+    explorerTransactionUrl: receipt.explorerTransactionUrl,
+    explorerAccountUrl: receipt.explorerAccountUrl,
+    explorerRegistryUrl: receipt.explorerRegistryUrl,
+    explorerVerifierUrl: receipt.explorerVerifierUrl,
+  };
 }
 
 function digestJson(value: unknown) {

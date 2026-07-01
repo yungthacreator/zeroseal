@@ -15,6 +15,7 @@ import { ReceiptsService } from "./receipts.service";
 import { StellarService } from "./stellar.service";
 import { CONFIG } from "./tokens";
 import { TransactionsService } from "./transactions.service";
+import { VerificationService } from "./verification.service";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { TransactionsService } from "./transactions.service";
     ContinuationsService,
     TransactionsService,
     ReceiptsService,
+    VerificationService,
     StellarService,
     {
       provide: APP_FILTER,

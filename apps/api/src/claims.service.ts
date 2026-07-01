@@ -390,7 +390,7 @@ export class ClaimsService {
       ClaimStatus.AWAITING_WALLET_SIGNATURE,
       ClaimStatus.SUBMITTED,
     ];
-    const isRegistrationTransaction = input.method === "register_researcher";
+    const isClaimSubmission = input.method === "submit_claim";
     const registrationStatuses: ClaimStatus[] = [
       ClaimStatus.AWAITING_PROOF,
       ClaimStatus.PROOF_RECEIVED,
@@ -399,11 +399,25 @@ export class ClaimsService {
       ClaimStatus.SUBMITTED,
     ];
 
-    if (isRegistrationTransaction) {
+    if (isClaimSubmission) {
       if (!input.researcherCommitment) {
         throw new ApiError(
           "RESEARCHER_COMMITMENT_REQUIRED",
-          "Registration transactions must include the researcher commitment from the proof artifact.",
+          "Claim submissions must include the researcher commitment from the public invocation.",
+          422,
+        );
+      }
+      if (!input.claimCommitment) {
+        throw new ApiError(
+          "CLAIM_COMMITMENT_REQUIRED",
+          "Claim submissions must include the claim commitment from the public invocation.",
+          422,
+        );
+      }
+      if (!input.nullifier) {
+        throw new ApiError(
+          "NULLIFIER_REQUIRED",
+          "Claim submissions must include the nullifier from the public invocation.",
           422,
         );
       }
@@ -418,11 +432,18 @@ export class ClaimsService {
           422,
         );
       }
+      if (claim.nullifier && input.nullifier !== claim.nullifier) {
+        throw new ApiError(
+          "NULLIFIER_MISMATCH",
+          "Claim submission nullifier does not match the active claim.",
+          422,
+        );
+      }
     }
 
     if (
       !recordableStatuses.includes(claim.status) &&
-      !(isRegistrationTransaction && registrationStatuses.includes(claim.status))
+      !(isClaimSubmission && registrationStatuses.includes(claim.status))
     ) {
       throw new ApiError("CLAIM_NOT_READY_FOR_TRANSACTION", "Claim is not ready for transaction recording.", 409);
     }
@@ -441,7 +462,7 @@ export class ClaimsService {
           contractId: input.contractId,
           method: input.method,
           operationType: input.operationType,
-          researcherCommitment: isRegistrationTransaction
+          researcherCommitment: isClaimSubmission
             ? input.researcherCommitment
             : undefined,
         },
@@ -454,7 +475,7 @@ export class ClaimsService {
           contractId: input.contractId,
           method: input.method,
           operationType: input.operationType,
-          researcherCommitment: isRegistrationTransaction
+          researcherCommitment: isClaimSubmission
             ? input.researcherCommitment
             : undefined,
           idempotencyKey: input.idempotencyKey,

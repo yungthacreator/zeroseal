@@ -4,7 +4,7 @@ import Image from "next/image";
 
 type Platform = { name: string; logo?: string };
 
-// Brief: logos and platform names only — no descriptions, no cards.
+// Brief: logos and platform names only, no descriptions, no cards.
 const PLATFORMS: Platform[] = [
   { name: "HackerOne", logo: "/brands/hackerone.svg" },
   { name: "Bugcrowd" },

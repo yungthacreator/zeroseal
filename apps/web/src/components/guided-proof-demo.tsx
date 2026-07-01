@@ -68,19 +68,19 @@ function SceneArtwork({
     <div className="demo-art" aria-hidden="true">
       <div className="demo-art__node demo-art__node--device" data-active={isActive("device")}>
         <span>Private device</span>
-        <strong>report · PoC · notes</strong>
+        <strong><em>Report</em> &middot; <em>PoC</em> &middot; <em>Notes</em></strong>
       </div>
       <div className="demo-art__node demo-art__node--zeroseal" data-active={isActive("zeroseal")}>
         <span>ZeroSeal</span>
-        <strong>private seal</strong>
+        <strong><em>Private Seal</em></strong>
       </div>
       <div className="demo-art__node demo-art__node--wallet" data-active={isActive("wallet")}>
         <span>Wallet</span>
-        <strong>Testnet approval</strong>
+        <strong><em>Testnet Approval</em></strong>
       </div>
       <div className="demo-art__node demo-art__node--receipt" data-active={isActive("receipt")}>
         <span>Receipt</span>
-        <strong>verified public record</strong>
+        <strong><em>Verified Public Record</em></strong>
       </div>
       <span className="demo-art__path demo-art__path--one" />
       <span className="demo-art__path demo-art__path--two" />
@@ -88,7 +88,6 @@ function SceneArtwork({
     </div>
   );
 }
-
 export function GuidedProofDemo() {
   const [index, setIndex] = useState(0);
   const [running, setRunning] = useState(false);

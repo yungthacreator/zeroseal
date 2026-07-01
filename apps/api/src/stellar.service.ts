@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { Horizon, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { Address, Horizon, StrKey, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import { createHash } from "node:crypto";
 import { CONFIG } from "./tokens";
 import type { ApiConfig } from "./config";
@@ -15,10 +15,13 @@ export type ConfirmedTransaction = {
   feeCharged: string | null;
 };
 
-export type RecoveredRegistrationTransaction = ConfirmedTransaction & {
+export type RecoveredSubmitClaimTransaction = ConfirmedTransaction & {
   contractId: string;
-  method: "register_researcher";
+  method: "submit_claim";
+  researcher: string;
   researcherCommitment: string;
+  claimCommitment: string;
+  nullifier: string;
   explorerTransactionUrl: string;
   explorerAccountUrl: string;
   explorerRegistryUrl: string;
@@ -67,9 +70,11 @@ type HorizonOperationsPage = {
 @Injectable()
 export class StellarService {
   private readonly horizon: Horizon.Server;
+  private readonly rpcServer: rpc.Server;
 
   constructor(@Inject(CONFIG) private readonly config: ApiConfig) {
     this.horizon = new Horizon.Server(config.STELLAR_HORIZON_URL);
+    this.rpcServer = new rpc.Server(config.STELLAR_RPC_URL);
   }
 
   explorerTransactionUrl(hash: string): string {
@@ -137,6 +142,110 @@ export class StellarService {
     }
   }
 
+  async fetchSubmitClaimInvocation(
+    hash: string,
+  ): Promise<RecoveredSubmitClaimTransaction | null> {
+    const normalized = this.validateTransactionHash(hash);
+
+    let tx: Awaited<ReturnType<rpc.Server["getTransaction"]>>;
+    try {
+      tx = await this.rpcServer.getTransaction(normalized);
+    } catch {
+      throw new ApiError(
+        "STELLAR_UPSTREAM_UNAVAILABLE",
+        "Stellar transaction status is temporarily unavailable.",
+        503,
+      );
+    }
+
+    if (tx.status === "NOT_FOUND") {
+      return null;
+    }
+
+    if (tx.status !== "SUCCESS") {
+      return null;
+    }
+
+    const envelope =
+      typeof tx.envelopeXdr === "string"
+        ? xdr.TransactionEnvelope.fromXDR(tx.envelopeXdr, "base64")
+        : tx.envelopeXdr;
+    const transaction = transactionFromEnvelope(envelope);
+    if (!transaction) {
+      return null;
+    }
+
+    const operations = transaction.operations();
+    if (operations.length !== 1) {
+      return null;
+    }
+
+    const body = operations[0].body();
+    if (body.switch().name !== "invokeHostFunction") {
+      return null;
+    }
+
+    const hostFunction = body.invokeHostFunctionOp().hostFunction();
+    if (hostFunction.switch().name !== "hostFunctionTypeInvokeContract") {
+      return null;
+    }
+
+    const invocation = hostFunction.invokeContract();
+    const contractId = Address.fromScAddress(
+      invocation.contractAddress(),
+    ).toString();
+    const method = invocation.functionName().toString();
+    if (method !== "submit_claim") {
+      return null;
+    }
+
+    const args = invocation.args();
+    if (args.length !== 4) {
+      return null;
+    }
+
+    const researcher = scValToNative(args[0]);
+    const researcherCommitment = bytesHex(scValToNative(args[1]));
+    const claimCommitment = bytesHex(scValToNative(args[2]));
+    const nullifier = bytesHex(scValToNative(args[3]));
+
+    if (
+      typeof researcher !== "string" ||
+      !researcherCommitment ||
+      !claimCommitment ||
+      !nullifier
+    ) {
+      return null;
+    }
+
+    const rpcFeeCharged = (tx as { feeCharged?: unknown }).feeCharged;
+
+    return {
+      hash: normalized,
+      successful: true,
+      ledger: typeof tx.ledger === "number" ? tx.ledger : null,
+      sourceAccount: sourceAccountFromEnvelope(transaction.sourceAccount()),
+      createdAt: rpcCreatedAt(tx.createdAt),
+      feeCharged:
+        typeof rpcFeeCharged === "number" ||
+        typeof rpcFeeCharged === "string"
+          ? String(rpcFeeCharged)
+          : null,
+      contractId,
+      method: "submit_claim",
+      researcher,
+      researcherCommitment,
+      claimCommitment,
+      nullifier,
+      explorerTransactionUrl: this.explorerTransactionUrl(normalized),
+      explorerAccountUrl: this.explorerAccountUrl(researcher),
+      explorerRegistryUrl: this.explorerContractUrl(contractId),
+      explorerVerifierUrl: this.explorerContractUrl(
+        this.config.VERIFIER_CONTRACT_ID,
+      ),
+    };
+  }
+
   private decodeScVal(value: unknown): unknown {
     if (typeof value !== "string") {
       return null;
@@ -161,11 +270,13 @@ export class StellarService {
     return (await response.json()) as T;
   }
 
-  async recoverResearcherRegistration(
+  async recoverSubmitClaim(
     account: string,
     researcherCommitment?: string,
+    claimCommitment?: string,
+    nullifier?: string,
     options: RegistrationRecoveryOptions = {},
-  ): Promise<RecoveredRegistrationTransaction | null> {
+  ): Promise<RecoveredSubmitClaimTransaction | null> {
     const url = `${this.config.STELLAR_HORIZON_URL}/accounts/${account}/transactions?order=desc&limit=50`;
     const page = await this.fetchJson<HorizonTransactionsPage>(url);
     const records = page._embedded?.records ?? [];
@@ -229,7 +340,7 @@ export class StellarService {
           operation.transaction_successful !== true ||
           operation.source_account !== account ||
           !Array.isArray(operation.parameters) ||
-          operation.parameters.length < 4
+          operation.parameters.length < 6
         ) {
           continue;
         }
@@ -238,17 +349,31 @@ export class StellarService {
         const method = this.decodeScVal(operation.parameters[1]?.value);
         const researcher = this.decodeScVal(operation.parameters[2]?.value);
         const commitment = this.decodeScVal(operation.parameters[3]?.value);
+        const claim = this.decodeScVal(operation.parameters[4]?.value);
+        const nullifierValue = this.decodeScVal(operation.parameters[5]?.value);
         const commitmentHex = Buffer.isBuffer(commitment)
           ? commitment.toString("hex")
           : commitment instanceof Uint8Array
             ? Buffer.from(commitment).toString("hex")
             : null;
+        const claimHex = Buffer.isBuffer(claim)
+          ? claim.toString("hex")
+          : claim instanceof Uint8Array
+            ? Buffer.from(claim).toString("hex")
+            : null;
+        const nullifierHex = Buffer.isBuffer(nullifierValue)
+          ? nullifierValue.toString("hex")
+          : nullifierValue instanceof Uint8Array
+            ? Buffer.from(nullifierValue).toString("hex")
+            : null;
 
         if (
           contract !== this.config.REGISTRY_CONTRACT_ID ||
-          method !== "register_researcher" ||
+          method !== "submit_claim" ||
           researcher !== account ||
-          !commitmentHex
+          !commitmentHex ||
+          !claimHex ||
+          !nullifierHex
         ) {
           continue;
         }
@@ -256,6 +381,20 @@ export class StellarService {
         if (
           researcherCommitment &&
           commitmentHex.toLowerCase() !== researcherCommitment.toLowerCase()
+        ) {
+          continue;
+        }
+
+        if (
+          claimCommitment &&
+          claimHex.toLowerCase() !== claimCommitment.toLowerCase()
+        ) {
+          continue;
+        }
+
+        if (
+          nullifier &&
+          nullifierHex.toLowerCase() !== nullifier.toLowerCase()
         ) {
           continue;
         }
@@ -273,8 +412,11 @@ export class StellarService {
               ? String(transaction.fee_charged)
               : null,
           contractId: this.config.REGISTRY_CONTRACT_ID,
-          method: "register_researcher",
+          method: "submit_claim",
+          researcher: account,
           researcherCommitment: commitmentHex,
+          claimCommitment: claimHex,
+          nullifier: nullifierHex,
           explorerTransactionUrl: this.explorerTransactionUrl(transaction.hash),
           explorerAccountUrl: this.explorerAccountUrl(account),
           explorerRegistryUrl: this.explorerContractUrl(
@@ -289,4 +431,49 @@ export class StellarService {
 
     return null;
   }
+}
+
+function transactionFromEnvelope(envelope: xdr.TransactionEnvelope) {
+  switch (envelope.switch().name) {
+    case "envelopeTypeTx":
+      return envelope.v1().tx();
+    case "envelopeTypeTxFeeBump":
+      return envelope.feeBump().tx().innerTx().v1().tx();
+    default:
+      return null;
+  }
+}
+
+function sourceAccountFromEnvelope(source: xdr.MuxedAccount): string | null {
+  switch (source.switch().name) {
+    case "keyTypeEd25519":
+      return StrKey.encodeEd25519PublicKey(Buffer.from(source.ed25519()));
+    case "keyTypeMuxedEd25519":
+      return StrKey.encodeEd25519PublicKey(
+        Buffer.from(source.med25519().ed25519()),
+      );
+    default:
+      return null;
+  }
+}
+
+function bytesHex(value: unknown): string | null {
+  if (Buffer.isBuffer(value)) {
+    return value.toString("hex");
+  }
+  if (value instanceof Uint8Array) {
+    return Buffer.from(value).toString("hex");
+  }
+  return null;
+}
+
+function rpcCreatedAt(value: unknown): Date | null {
+  if (typeof value === "number") {
+    return new Date(value * 1000);
+  }
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
 }
