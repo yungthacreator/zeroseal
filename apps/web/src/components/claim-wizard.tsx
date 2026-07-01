@@ -519,20 +519,42 @@ export function signedTransactionMessage(error: unknown): string {
   const message = errorMessage(error);
   const normalized = message.toLowerCase();
 
-  if (
-    normalized.includes("timeout") ||
-    normalized.includes("transport")
-  ) {
+  if (normalized.includes("freighter did not respond")) {
     return "Freighter did not respond. Open and unlock Freighter, confirm Testnet, then retry wallet approval.";
   }
 
   if (
-    normalized.includes("reject") ||
-    normalized.includes("declin") ||
-    normalized.includes("cancel") ||
-    normalized.includes("denied")
+    normalized.includes("freighter approval was rejected") ||
+    normalized.includes("user rejected") ||
+    normalized.includes("user declined") ||
+    normalized.includes("user denied") ||
+    normalized.includes("user cancelled") ||
+    normalized.includes("user canceled") ||
+    normalized.includes("request rejected by user") ||
+    normalized.includes("request denied by user")
   ) {
     return "Freighter approval was rejected. The claim is preserved and no transaction was submitted.";
+  }
+
+  if (
+    normalized.includes("stellar rejected the transaction before confirmation") ||
+    normalized.includes("stellar transaction submission failed")
+  ) {
+    return "Wallet approval succeeded, but Stellar submission failed. No receipt was created. Open Technical details for the RPC response.";
+  }
+
+  if (
+    normalized.includes("stellar testnet rejected transaction") ||
+    normalized.includes("stellar testnet transaction failed")
+  ) {
+    return "Wallet approval succeeded, but Stellar confirmed that the transaction failed. No receipt was created. Open Technical details.";
+  }
+
+  if (
+    normalized.includes("stellar did not confirm transaction") ||
+    normalized.includes("stellar rpc did not confirm")
+  ) {
+    return "The transaction was signed, but Stellar confirmation could not be completed. No receipt was created. Open Technical details before retrying.";
   }
 
   if (normalized.includes("hosterror") || normalized.includes("host error")) {
@@ -609,15 +631,22 @@ function walletApprovalFailureMessage(message: string): string {
   if (normalized.includes("timeout") || normalized.includes("transport")) {
     return "Freighter did not respond. Open and unlock Freighter, confirm Testnet, then retry wallet approval.";
   }
+
   if (
-    normalized.includes("reject") ||
-    normalized.includes("declin") ||
-    normalized.includes("cancel") ||
-    normalized.includes("denied")
+    normalized.includes("user rejected") ||
+    normalized.includes("user declined") ||
+    normalized.includes("user denied") ||
+    normalized.includes("user cancelled") ||
+    normalized.includes("user canceled") ||
+    normalized.includes("request rejected by user") ||
+    normalized.includes("request denied by user")
   ) {
     return "Freighter approval was rejected. The claim is preserved and no transaction was submitted.";
   }
-  return message || "Freighter did not respond. Open and unlock Freighter, confirm Testnet, then retry wallet approval.";
+
+  return message
+    ? `Freighter signing failed: ${message}`
+    : "Freighter did not return a signed transaction.";
 }
 
 function isWalletApprovalFailure(error: unknown): boolean {
@@ -1400,6 +1429,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     let signedTransactionForRetry: PendingTransaction | null = null;
 
     try {
+      setTechnicalError(null);
       setPublishState("awaiting_wallet");
       setMessage("Waiting for Freighter. Rejecting the request will not submit a transaction.");
 
@@ -1443,6 +1473,10 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       await syncBackendTransaction(signedTransaction);
       setStep(4);
     } catch (error) {
+      const approvalError =
+        errorMessage(error) || "Unknown wallet or Stellar submission error.";
+      setTechnicalError(approvalError);
+
       if (isWalletApprovalFailure(error)) {
         setPublishState("wallet_retry");
         setMessage(errorMessage(error));

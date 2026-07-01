@@ -121,7 +121,17 @@ void test("rejects an RPC submission error before saving a receipt", async () =>
       server,
       maxPollAttempts: 1,
     }),
-    /Stellar rejected the transaction before confirmation/,
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(
+        error.message,
+        /Stellar transaction submission failed before confirmation/,
+      );
+      assert.match(error.message, /No ZeroSeal receipt was created/);
+      assert.match(error.message, /Stellar RPC details: status=ERROR/);
+      assert.doesNotMatch(error.message, /Freighter approval was rejected/);
+      return true;
+    },
   );
   assert.equal(confirmationChecks, 0);
 });
@@ -146,7 +156,17 @@ void test("rejects a transaction that Stellar reports as FAILED", async () => {
       server,
       maxPollAttempts: 1,
     }),
-    /Stellar Testnet rejected transaction/,
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(
+        error.message,
+        new RegExp(`Stellar Testnet transaction failed for ${TX_HASH}`),
+      );
+      assert.match(error.message, /No ZeroSeal receipt was created/);
+      assert.match(error.message, /Stellar RPC details: status=FAILED/);
+      assert.doesNotMatch(error.message, /Freighter approval was rejected/);
+      return true;
+    },
   );
 });
 

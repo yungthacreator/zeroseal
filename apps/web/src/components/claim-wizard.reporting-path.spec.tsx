@@ -520,14 +520,25 @@ void test("wallet change invalidates old prepared XDR and runtime receipt state"
 });
 
 void test("mobile desktop continuation uses public origin when configured and no localhost fallback", () => {
-  assert.equal(
-    desktopContinuationUrl("/continue/abc", "http://127.0.0.1:3001"),
-    "https://zeroseal.vercel.app/continue/abc",
-  );
-  assert.equal(
-    desktopContinuationUrl("/continue/abc", "https://zeroseal.app"),
-    "https://zeroseal.vercel.app/continue/abc",
-  );
+  const previousPublicUrl = process.env.NEXT_PUBLIC_ZEROSEAL_PUBLIC_URL;
+  process.env.NEXT_PUBLIC_ZEROSEAL_PUBLIC_URL = "https://zeroseal.vercel.app";
+
+  try {
+    assert.equal(
+      desktopContinuationUrl("/continue/abc", "http://127.0.0.1:3001"),
+      "https://zeroseal.vercel.app/continue/abc",
+    );
+    assert.equal(
+      desktopContinuationUrl("/continue/abc", "https://zeroseal.app"),
+      "https://zeroseal.vercel.app/continue/abc",
+    );
+  } finally {
+    if (previousPublicUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_ZEROSEAL_PUBLIC_URL;
+    } else {
+      process.env.NEXT_PUBLIC_ZEROSEAL_PUBLIC_URL = previousPublicUrl;
+    }
+  }
 });
 
 void test("reset clears wallet-specific transaction and receipt state without leaking old receipt", () => {

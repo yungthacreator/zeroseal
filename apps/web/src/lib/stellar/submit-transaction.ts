@@ -94,6 +94,51 @@ export function responseLedger(value: unknown, depth = 0): string | null {
   return null;
 }
 
+function rpcFailureDetails(value: unknown): string {
+  const record = asRecord(value);
+  if (!record) {
+    return "";
+  }
+
+  const details: string[] = [];
+  for (const key of [
+    "status",
+    "errorResult",
+    "message",
+    "error",
+    "resultXdr",
+    "latestLedger",
+  ] as const) {
+    const candidate = record[key];
+
+    if (
+      typeof candidate === "string" ||
+      typeof candidate === "number" ||
+      typeof candidate === "boolean" ||
+      typeof candidate === "bigint"
+    ) {
+      details.push(`${key}=${String(candidate)}`);
+      continue;
+    }
+
+    if (candidate && typeof candidate === "object") {
+      try {
+        const serialized = JSON.stringify(candidate, (_key, nested) =>
+          typeof nested === "bigint" ? nested.toString() : nested,
+        );
+        if (serialized) {
+          details.push(`${key}=${serialized}`);
+        }
+      } catch {
+        // Ignore diagnostic values that cannot be serialised safely.
+      }
+    }
+  }
+
+  const joined = details.join("; ");
+  return joined ? ` Stellar RPC details: ${joined.slice(0, 2000)}` : "";
+}
+
 function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -120,9 +165,11 @@ export async function submitSignedXdr({
   let sent: unknown;
   try {
     sent = await client.sendTransaction(transaction);
-  } catch {
+  } catch (error) {
+    const detail =
+      error instanceof Error && error.message ? ` Details: ${error.message}` : "";
     throw new Error(
-      "Stellar RPC did not confirm whether it accepted the signed transaction. No ZeroSeal receipt was created. Check Freighter or Stellar Explorer before retrying.",
+      `Stellar RPC did not confirm whether it accepted the signed transaction. No ZeroSeal receipt was created. Check Freighter or Stellar Explorer before retrying.${detail}`,
     );
   }
 
@@ -131,13 +178,13 @@ export async function submitSignedXdr({
 
   if (initialStatus === "ERROR") {
     throw new Error(
-      "Stellar rejected the transaction before confirmation. No ZeroSeal receipt was created. Prepare the stamp again.",
+      `Stellar transaction submission failed before confirmation. No ZeroSeal receipt was created.${rpcFailureDetails(sent)}`,
     );
   }
 
   if (initialStatus === "TRY_AGAIN_LATER") {
     throw new Error(
-      "Stellar RPC asked ZeroSeal to retry later. No transaction was confirmed and no receipt was created.",
+      `Stellar RPC asked ZeroSeal to retry later. No transaction was confirmed and no receipt was created.${rpcFailureDetails(sent)}`,
     );
   }
 
@@ -163,13 +210,13 @@ export async function submitSignedXdr({
 
       if (status === "FAILED") {
         throw new Error(
-          `Stellar Testnet rejected transaction ${hash}. No ZeroSeal receipt was created.`,
+          `Stellar Testnet transaction failed for ${hash}. No ZeroSeal receipt was created.${rpcFailureDetails(confirmation)}`,
         );
       }
     } catch (error) {
       if (
         error instanceof Error &&
-        error.message.startsWith("Stellar Testnet rejected transaction")
+        error.message.startsWith("Stellar Testnet transaction failed")
       ) {
         throw error;
       }
