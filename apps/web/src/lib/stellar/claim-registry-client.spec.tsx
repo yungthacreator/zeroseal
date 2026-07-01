@@ -5,14 +5,19 @@ import test from "node:test";
 import {
   Account,
   BASE_FEE,
+  Keypair,
   nativeToScVal,
   Networks,
   Operation,
+  SorobanDataBuilder,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 
 import { DEFAULT_REGISTRY_CONTRACT_ID } from "./config";
-import { decodeSubmitClaimArgsFromXdr } from "./claim-registry-client";
+import {
+  assertSubmitClaimSignedXdrReady,
+  decodeSubmitClaimArgsFromXdr,
+} from "./claim-registry-client";
 
 const OLD_REGISTRY_CONTRACT_ID =
   "CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R";
@@ -99,4 +104,53 @@ void test("Step 5 displayed submit_claim commitments match decoded signable XDR"
     claimCommitment: CLAIM_COMMITMENT,
     nullifier: NULLIFIER,
   });
+});
+
+void test("signed submit_claim XDR readiness requires signature and Soroban data", () => {
+  const source = Keypair.random();
+  const researcherCommitment = "01".repeat(32);
+  const claimCommitment = "02".repeat(32);
+  const nullifier = "03".repeat(32);
+  const transaction = new TransactionBuilder(new Account(source.publicKey(), "1"), {
+    fee: "5000",
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: DEFAULT_REGISTRY_CONTRACT_ID,
+        function: "submit_claim",
+        args: [
+          nativeToScVal(source.publicKey(), { type: "address" }),
+          nativeToScVal(Buffer.from(researcherCommitment, "hex"), {
+            type: "bytes",
+          }),
+          nativeToScVal(Buffer.from(claimCommitment, "hex"), {
+            type: "bytes",
+          }),
+          nativeToScVal(Buffer.from(nullifier, "hex"), { type: "bytes" }),
+        ],
+      }),
+    )
+    .setSorobanData(new SorobanDataBuilder().setResourceFee("2000").build())
+    .setTimeout(30)
+    .build();
+
+  transaction.sign(source);
+
+  const readiness = assertSubmitClaimSignedXdrReady({
+    signedXdr: transaction.toXDR(),
+    networkPassphrase: Networks.TESTNET,
+    expected: {
+      contractId: DEFAULT_REGISTRY_CONTRACT_ID,
+      researcher: source.publicKey(),
+      researcherCommitment,
+      claimCommitment,
+      nullifier,
+    },
+  });
+
+  assert.equal(readiness.decoded.method, "submit_claim");
+  assert.equal(readiness.signatureCount, 1);
+  assert.equal(readiness.feeStroops, "7000");
+  assert.equal(readiness.sorobanResourceFee, "2000");
 });

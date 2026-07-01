@@ -1,6 +1,6 @@
 import { signTransaction } from "@stellar/freighter-api";
 import { Buffer } from "buffer";
-import { Address, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { Address, Networks, TransactionBuilder, scValToNative, xdr } from "@stellar/stellar-sdk";
 import { Client as ContractClient, type AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import { DEFAULT_REGISTRY_CONTRACT_ID } from "@/lib/stellar/config";
 
@@ -47,6 +47,21 @@ export type ClaimRegistryClient = ContractClient & {
 export type DecodedSubmitClaimArgs = {
   contractId: string;
   method: "submit_claim";
+  researcher: string;
+  researcherCommitment: string;
+  claimCommitment: string;
+  nullifier: string;
+};
+
+export type SubmitClaimSignedXdrReadiness = {
+  decoded: DecodedSubmitClaimArgs;
+  signatureCount: number;
+  feeStroops: string;
+  sorobanResourceFee: string;
+};
+
+type ExpectedSubmitClaim = {
+  contractId: string;
   researcher: string;
   researcherCommitment: string;
   claimCommitment: string;
@@ -168,6 +183,74 @@ export function decodeSubmitClaimArgsFromXdr(
     researcherCommitment,
     claimCommitment,
     nullifier,
+  };
+}
+
+export function assertSubmitClaimSignedXdrReady({
+  signedXdr,
+  networkPassphrase,
+  expected,
+}: {
+  signedXdr: string;
+  networkPassphrase: string;
+  expected: ExpectedSubmitClaim;
+}): SubmitClaimSignedXdrReadiness {
+  if (networkPassphrase !== Networks.TESTNET) {
+    throw new Error("Signed submit_claim XDR must target Stellar Testnet.");
+  }
+
+  const envelope = xdr.TransactionEnvelope.fromXDR(signedXdr, "base64");
+  if (envelope.switch().name !== "envelopeTypeTx") {
+    throw new Error("Signed submit_claim XDR must be a standard transaction envelope.");
+  }
+
+  const signatureCount = envelope.v1().signatures().length;
+  if (signatureCount < 1) {
+    throw new Error("Signed submit_claim XDR has no transaction signature.");
+  }
+
+  const transaction = envelope.v1().tx();
+  const sorobanData = transaction.ext().value();
+  const sorobanResourceFee =
+    typeof sorobanData?.resourceFee === "function"
+      ? sorobanData.resourceFee().toString()
+      : "";
+
+  if (!sorobanData || !sorobanResourceFee) {
+    throw new Error("Signed submit_claim XDR is missing Soroban transaction data.");
+  }
+
+  if (BigInt(sorobanResourceFee) <= BigInt(0)) {
+    throw new Error("Signed submit_claim XDR has an invalid Soroban resource fee.");
+  }
+
+  const parsed = TransactionBuilder.fromXDR(signedXdr, networkPassphrase);
+  if (!("fee" in parsed)) {
+    throw new Error("Signed submit_claim XDR must not be a fee-bump envelope.");
+  }
+
+  const feeStroops = parsed.fee;
+  if (BigInt(feeStroops) <= BigInt(100)) {
+    throw new Error("Signed submit_claim XDR still has only an unassembled base fee.");
+  }
+
+  const decoded = decodeSubmitClaimArgsFromXdr(signedXdr);
+  if (
+    decoded.contractId !== expected.contractId ||
+    decoded.method !== "submit_claim" ||
+    decoded.researcher !== expected.researcher ||
+    decoded.researcherCommitment !== expected.researcherCommitment ||
+    decoded.claimCommitment !== expected.claimCommitment ||
+    decoded.nullifier !== expected.nullifier
+  ) {
+    throw new Error("Signed submit_claim XDR does not match the reviewed public commitments.");
+  }
+
+  return {
+    decoded,
+    signatureCount,
+    feeStroops,
+    sorobanResourceFee,
   };
 }
 

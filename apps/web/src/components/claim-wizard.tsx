@@ -34,9 +34,12 @@ import {
 } from "@/lib/claim-flow";
 import { persistReceipt } from "@/lib/receipt-store";
 import {
+  assertSubmitClaimSignedXdrReady,
   createClaimRegistryClient,
   decodeSubmitClaimArgsFromXdr,
   readClaimRegistryRuntimeConfig,
+  type ClaimRegistryClient,
+  type SubmitClaimSignedXdrReadiness,
 } from "@/lib/stellar/claim-registry-client";
 import { submitSignedXdr } from "@/lib/stellar/submit-transaction";
 import {
@@ -69,16 +72,25 @@ type PendingTransaction = {
   review: PreparedReview;
 };
 
+type PreparedSubmitClaimTransaction = Awaited<ReturnType<ClaimRegistryClient["submit_claim"]>>;
+type SdkSignTransaction = NonNullable<
+  Parameters<PreparedSubmitClaimTransaction["sign"]>[0]
+>["signTransaction"];
+type SdkPreparedSubmitClaimSigner = {
+  signed?: { toXDR: () => string };
+  sign: (options?: { signTransaction?: SdkSignTransaction }) => Promise<void>;
+};
+
 type PreparedRegistryAction = {
   claim: ApiClaim;
   payload: PublicPayload;
   review: PreparedReview;
-  signableXdr: string;
+  transaction: PreparedSubmitClaimTransaction;
   networkPassphrase: string;
   rpcUrl: string;
 };
 
-type PreparedReview = {
+export type PreparedReview = {
   wallet: string;
   contractId: string;
   method: "submit_claim";
@@ -626,6 +638,46 @@ export async function signPreparedXdr({
   };
 }
 
+export async function signSdkPreparedSubmitClaim({
+  transaction,
+  review,
+  networkPassphrase,
+  signTransaction = freighterSignTransaction,
+}: {
+  transaction: SdkPreparedSubmitClaimSigner;
+  review: PreparedReview;
+  networkPassphrase: string;
+  signTransaction?: SdkSignTransaction;
+}): Promise<{
+  signedTxXdr: string;
+  readiness: SubmitClaimSignedXdrReadiness;
+}> {
+  try {
+    await transaction.sign({ signTransaction });
+  } catch (error) {
+    throw new Error(walletApprovalFailureMessage(errorMessage(error)));
+  }
+
+  const signedTxXdr = transaction.signed?.toXDR();
+  if (!signedTxXdr) {
+    throw new Error("Freighter did not return a signed transaction.");
+  }
+
+  const readiness = assertSubmitClaimSignedXdrReady({
+    signedXdr: signedTxXdr,
+    networkPassphrase,
+    expected: {
+      contractId: review.contractId,
+      researcher: review.wallet,
+      researcherCommitment: review.researcherCommitment,
+      claimCommitment: review.claimCommitment,
+      nullifier: review.nullifier,
+    },
+  });
+
+  return { signedTxXdr, readiness };
+}
+
 function walletApprovalFailureMessage(message: string): string {
   const normalized = message.toLowerCase();
   if (normalized.includes("timeout") || normalized.includes("transport")) {
@@ -654,6 +706,13 @@ function isWalletApprovalFailure(error: unknown): boolean {
   return (
     message.includes("freighter did not respond") ||
     message.includes("freighter approval was rejected") ||
+    message.includes("user rejected") ||
+    message.includes("user declined") ||
+    message.includes("user denied") ||
+    message.includes("user cancelled") ||
+    message.includes("user canceled") ||
+    message.includes("request rejected by user") ||
+    message.includes("request denied by user") ||
     message.includes("freighter did not return") ||
     message.includes("different wallet")
   );
@@ -1433,9 +1492,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       setPublishState("awaiting_wallet");
       setMessage("Waiting for Freighter. Rejecting the request will not submit a transaction.");
 
-      const signed = await signPreparedXdr({
-        signableXdr: prepared.signableXdr,
-        walletAddress: prepared.review.wallet,
+      const signed = await signSdkPreparedSubmitClaim({
+        transaction: prepared.transaction,
+        review: prepared.review,
         networkPassphrase: prepared.networkPassphrase,
       });
       setPublishState("signed");
@@ -1594,7 +1653,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         claim,
         payload,
         review,
-        signableXdr,
+        transaction,
         networkPassphrase: runtimeConfig.networkPassphrase,
         rpcUrl: runtimeConfig.rpcUrl,
       };

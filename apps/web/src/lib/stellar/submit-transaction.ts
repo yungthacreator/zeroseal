@@ -139,6 +139,30 @@ function rpcFailureDetails(value: unknown): string {
   return joined ? ` Stellar RPC details: ${joined.slice(0, 2000)}` : "";
 }
 
+function rpcMalformedEnvelopeNotice(value: unknown): string {
+  const record = asRecord(value);
+  if (!record) {
+    return "";
+  }
+
+  try {
+    const serialized = JSON.stringify(record, (_key, nested) =>
+      typeof nested === "bigint" ? nested.toString() : nested,
+    );
+    if (
+      /txMalformed/i.test(serialized) ||
+      /"value"\s*:\s*-16\b/.test(serialized) ||
+      /result\s*code\s*=\s*-16/i.test(serialized)
+    ) {
+      return " Stellar rejected the transaction envelope as malformed before contract execution.";
+    }
+  } catch {
+    // Ignore diagnostic values that cannot be serialised safely.
+  }
+
+  return "";
+}
+
 function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -178,7 +202,7 @@ export async function submitSignedXdr({
 
   if (initialStatus === "ERROR") {
     throw new Error(
-      `Stellar transaction submission failed before confirmation. No ZeroSeal receipt was created.${rpcFailureDetails(sent)}`,
+      `Stellar transaction submission failed before confirmation. No ZeroSeal receipt was created.${rpcMalformedEnvelopeNotice(sent)}${rpcFailureDetails(sent)}`,
     );
   }
 
