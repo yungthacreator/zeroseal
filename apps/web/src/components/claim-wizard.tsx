@@ -2,7 +2,7 @@
 
 import { Buffer } from "buffer";
 import { signTransaction as freighterSignTransaction } from "@stellar/freighter-api";
-import { rpc, TransactionBuilder } from "@stellar/stellar-sdk";
+import { TransactionBuilder } from "@stellar/stellar-sdk";
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -38,6 +38,7 @@ import {
   decodeSubmitClaimArgsFromXdr,
   readClaimRegistryRuntimeConfig,
 } from "@/lib/stellar/claim-registry-client";
+import { submitSignedXdr } from "@/lib/stellar/submit-transaction";
 import {
   DEFAULT_REGISTRY_CONTRACT_ID,
   DEFAULT_VERIFIER_CONTRACT_ID,
@@ -629,41 +630,6 @@ function isWalletApprovalFailure(error: unknown): boolean {
   );
 }
 
-async function submitSignedXdr({
-  signedTxXdr,
-  networkPassphrase,
-  rpcUrl,
-}: {
-  signedTxXdr: string;
-  networkPassphrase: string;
-  rpcUrl: string;
-}) {
-  const server = new rpc.Server(rpcUrl);
-  const transaction = TransactionBuilder.fromXDR(signedTxXdr, networkPassphrase);
-  const sent = await server.sendTransaction(transaction);
-  const hash =
-    typeof sent.hash === "string" ? sent.hash : extractTransactionHash(sent);
-
-  if (!hash) {
-    throw new Error("Stellar did not return a transaction hash.");
-  }
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const status = await server.getTransaction(hash);
-    if (status.status === "SUCCESS") {
-      return {
-        hash,
-        ledger: typeof status.ledger === "number" ? String(status.ledger) : null,
-      };
-    }
-    if (status.status === "FAILED") {
-      throw new Error("Stellar Testnet reported the signed transaction as failed.");
-    }
-    await sleep(1500);
-  }
-
-  return { hash, ledger: null };
-}
 
 export function validateReportStep(values: ReportStepValues): ReportStepValidation {
   const errors: Partial<Record<ReportStepField, string>> = {};

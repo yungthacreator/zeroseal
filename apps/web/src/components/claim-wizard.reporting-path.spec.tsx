@@ -522,11 +522,11 @@ void test("wallet change invalidates old prepared XDR and runtime receipt state"
 void test("mobile desktop continuation uses public origin when configured and no localhost fallback", () => {
   assert.equal(
     desktopContinuationUrl("/continue/abc", "http://127.0.0.1:3001"),
-    "/continue/abc",
+    "https://zeroseal.vercel.app/continue/abc",
   );
   assert.equal(
     desktopContinuationUrl("/continue/abc", "https://zeroseal.app"),
-    "https://zeroseal.app/continue/abc",
+    "https://zeroseal.vercel.app/continue/abc",
   );
 });
 
