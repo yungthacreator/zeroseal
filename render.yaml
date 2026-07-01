@@ -1,4 +1,4 @@
-﻿services:
+services:
   - type: keyvalue
     name: zeroseal-redis
     plan: free
@@ -10,13 +10,12 @@
   - type: web
     name: zeroseal-api
     runtime: node
-    rootDir: apps/api
     plan: free
     region: oregon
     branch: main
     autoDeployTrigger: commit
-    buildCommand: npm ci && npm run prisma:generate && npm run build
-    startCommand: npx prisma migrate deploy && node dist/main.js
+    buildCommand: npm --prefix apps/api ci && npm --prefix apps/api run prisma:generate && npm --prefix apps/api run build
+    startCommand: cd apps/api && npx prisma migrate deploy && node dist/main.js
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
