@@ -137,6 +137,18 @@ void test("non-user Freighter errors keep their real cause", async () => {
   );
 });
 
+void test("Contract error #2 during preparation is not labelled as a Freighter error", () => {
+  const message = signedTransactionMessage(
+    new Error("Transaction simulation failed: HostError: Error(Contract, #2)"),
+  );
+
+  assert.equal(
+    message,
+    "Claim Registry identity mismatch. ZeroSeal could not reuse the researcher commitment already registered for this wallet.",
+  );
+  assert.doesNotMatch(message, /Freighter signing failed|Freighter approval was rejected/);
+});
+
 void test("SDK assembled transaction sign is used for the submit_claim path", async () => {
   const signed = signedSubmitClaimXdr();
   let assembledSignCalls = 0;

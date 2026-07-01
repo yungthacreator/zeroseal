@@ -17,6 +17,7 @@ import { DEFAULT_REGISTRY_CONTRACT_ID } from "./config";
 import {
   assertSubmitClaimSignedXdrReady,
   decodeSubmitClaimArgsFromXdr,
+  resolveOnChainResearcherCommitment,
 } from "./claim-registry-client";
 
 const OLD_REGISTRY_CONTRACT_ID =
@@ -29,6 +30,9 @@ const CLAIM_COMMITMENT =
   "cfa8caa9feef6e035354b47763dc50d1ffd7beefc63a6ced135a6f97dff2b980";
 const NULLIFIER =
   "0da1e0e0056857609cc20523e06ceb6a9a76304b6141f9c0c10a23c5bd2cd739";
+const FIRST_CLAIM_FINGERPRINT = "04".repeat(32);
+const SECOND_CLAIM_FINGERPRINT = "05".repeat(32);
+const ON_CHAIN_RESEARCHER_COMMITMENT = "06".repeat(32);
 
 void test("generated claim registry binding matches the minimal submit_claim ABI", async () => {
   const generatedPath = path.resolve(
@@ -154,3 +158,186 @@ void test("signed submit_claim XDR readiness requires signature and Soroban data
   assert.equal(readiness.feeStroops, "7000");
   assert.equal(readiness.sorobanResourceFee, "2000");
 });
+
+void test("first claim uses seal fingerprint when no on-chain researcher commitment exists", async () => {
+  const commitment = await resolveOnChainResearcherCommitment(
+    researcherCommitmentClient({
+      isErr: () => true,
+      unwrapErr: () => new Error("ResearcherNotRegistered"),
+      unwrap: () => {
+        throw new Error("missing researcher commitment must not unwrap");
+      },
+    }),
+    RESEARCHER,
+    FIRST_CLAIM_FINGERPRINT,
+  );
+
+  assert.equal(commitment, FIRST_CLAIM_FINGERPRINT);
+});
+
+void test("existing wallet reuses the on-chain researcher commitment", async () => {
+  const commitment = await resolveOnChainResearcherCommitment(
+    researcherCommitmentClient({
+      isErr: () => false,
+      unwrapErr: () => {
+        throw new Error("ok result must not unwrapErr");
+      },
+      unwrap: () => Buffer.from(ON_CHAIN_RESEARCHER_COMMITMENT, "hex"),
+    }),
+    RESEARCHER,
+    FIRST_CLAIM_FINGERPRINT,
+  );
+
+  assert.equal(commitment, ON_CHAIN_RESEARCHER_COMMITMENT);
+  assert.notEqual(commitment, FIRST_CLAIM_FINGERPRINT);
+});
+
+void test("different per-claim fingerprints can reuse one stable researcher commitment", async () => {
+  const client = researcherCommitmentClient({
+    isErr: () => false,
+    unwrapErr: () => {
+      throw new Error("ok result must not unwrapErr");
+    },
+    unwrap: () => Buffer.from(ON_CHAIN_RESEARCHER_COMMITMENT, "hex"),
+  });
+
+  assert.equal(
+    await resolveOnChainResearcherCommitment(
+      client,
+      RESEARCHER,
+      FIRST_CLAIM_FINGERPRINT,
+    ),
+    ON_CHAIN_RESEARCHER_COMMITMENT,
+  );
+  assert.equal(
+    await resolveOnChainResearcherCommitment(
+      client,
+      RESEARCHER,
+      SECOND_CLAIM_FINGERPRINT,
+    ),
+    ON_CHAIN_RESEARCHER_COMMITMENT,
+  );
+});
+
+void test("researcher commitment lookup only falls back for ResearcherNotRegistered", async () => {
+  await assert.rejects(
+    () =>
+      resolveOnChainResearcherCommitment(
+        researcherCommitmentClient({
+          isErr: () => true,
+          unwrapErr: () => new Error("ResearcherCommitmentMismatch Contract error #2"),
+          unwrap: () => Buffer.from(ON_CHAIN_RESEARCHER_COMMITMENT, "hex"),
+        }),
+        RESEARCHER,
+        FIRST_CLAIM_FINGERPRINT,
+      ),
+    /ResearcherCommitmentMismatch/,
+  );
+});
+
+void test("researcher commitment lookup treats SDK result getter ResearcherNotRegistered as first claim", async () => {
+  const commitment = await resolveOnChainResearcherCommitment(
+    {
+      get_researcher_commitment: async () => ({
+        get result() {
+          throw new Error("HostError: Error(Contract, #6) ResearcherNotRegistered");
+        },
+      }),
+    },
+    RESEARCHER,
+    FIRST_CLAIM_FINGERPRINT,
+  );
+
+  assert.equal(commitment, FIRST_CLAIM_FINGERPRINT);
+});
+
+void test("researcher commitment lookup rejects malformed on-chain values", async () => {
+  await assert.rejects(
+    () =>
+      resolveOnChainResearcherCommitment(
+        researcherCommitmentClient({
+          isErr: () => false,
+          unwrapErr: () => {
+            throw new Error("ok result must not unwrapErr");
+          },
+          unwrap: () => Buffer.from("07".repeat(31), "hex"),
+        }),
+        RESEARCHER,
+        FIRST_CLAIM_FINGERPRINT,
+      ),
+    /exactly 32 bytes/,
+  );
+});
+
+void test("signed XDR validation expects the resolved on-chain researcher commitment", () => {
+  const source = Keypair.random();
+  const transaction = new TransactionBuilder(new Account(source.publicKey(), "1"), {
+    fee: "5000",
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: DEFAULT_REGISTRY_CONTRACT_ID,
+        function: "submit_claim",
+        args: [
+          nativeToScVal(source.publicKey(), { type: "address" }),
+          nativeToScVal(Buffer.from(ON_CHAIN_RESEARCHER_COMMITMENT, "hex"), {
+            type: "bytes",
+          }),
+          nativeToScVal(Buffer.from(CLAIM_COMMITMENT, "hex"), {
+            type: "bytes",
+          }),
+          nativeToScVal(Buffer.from(NULLIFIER, "hex"), { type: "bytes" }),
+        ],
+      }),
+    )
+    .setSorobanData(new SorobanDataBuilder().setResourceFee("2000").build())
+    .setTimeout(30)
+    .build();
+
+  transaction.sign(source);
+
+  assert.equal(
+    assertSubmitClaimSignedXdrReady({
+      signedXdr: transaction.toXDR(),
+      networkPassphrase: Networks.TESTNET,
+      expected: {
+        contractId: DEFAULT_REGISTRY_CONTRACT_ID,
+        researcher: source.publicKey(),
+        researcherCommitment: ON_CHAIN_RESEARCHER_COMMITMENT,
+        claimCommitment: CLAIM_COMMITMENT,
+        nullifier: NULLIFIER,
+      },
+    }).decoded.researcherCommitment,
+    ON_CHAIN_RESEARCHER_COMMITMENT,
+  );
+
+  assert.throws(
+    () =>
+      assertSubmitClaimSignedXdrReady({
+        signedXdr: transaction.toXDR(),
+        networkPassphrase: Networks.TESTNET,
+        expected: {
+          contractId: DEFAULT_REGISTRY_CONTRACT_ID,
+          researcher: source.publicKey(),
+          researcherCommitment: FIRST_CLAIM_FINGERPRINT,
+          claimCommitment: CLAIM_COMMITMENT,
+          nullifier: NULLIFIER,
+        },
+      }),
+    /does not match/,
+  );
+});
+
+function researcherCommitmentClient(result: {
+  isErr: () => boolean;
+  unwrapErr: () => unknown;
+  unwrap: () => unknown;
+}) {
+  return {
+    get_researcher_commitment: async (args: { researcher: string }) => {
+      assert.equal(args.researcher, RESEARCHER);
+      return { result };
+    },
+  };
+}

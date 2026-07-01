@@ -68,6 +68,12 @@ type ExpectedSubmitClaim = {
   nullifier: string;
 };
 
+type ResearcherCommitmentLookupClient = {
+  get_researcher_commitment: (
+    args: { researcher: string },
+  ) => Promise<{ result: unknown }>;
+};
+
 function requirePublicEnvironmentValue(
   name:
     | "NEXT_PUBLIC_REGISTRY_CONTRACT_ID"
@@ -122,6 +128,53 @@ export async function createClaimRegistryClient(
   });
 
   return client as ClaimRegistryClient;
+}
+
+export async function resolveOnChainResearcherCommitment(
+  client: ResearcherCommitmentLookupClient,
+  researcher: string,
+  sealFingerprint: string,
+): Promise<string> {
+  const firstClaimCommitment = normalizeBytesN32Hex(
+    sealFingerprint,
+    "Seal researcher fingerprint",
+  );
+
+  let lookup;
+  try {
+    lookup = await client.get_researcher_commitment({ researcher });
+  } catch (error) {
+    if (isResearcherNotRegisteredError(error)) {
+      return firstClaimCommitment;
+    }
+    throw error;
+  }
+
+  let result: unknown;
+  try {
+    result = lookup.result;
+  } catch (error) {
+    if (isResearcherNotRegisteredError(error)) {
+      return firstClaimCommitment;
+    }
+    throw error;
+  }
+
+  if (isRustResultLike(result) && result.isErr()) {
+    const contractError = result.unwrapErr();
+    if (isResearcherNotRegisteredError(contractError)) {
+      return firstClaimCommitment;
+    }
+    throw new Error(
+      `Claim Registry researcher commitment lookup failed: ${unknownErrorMessage(contractError) || "unknown contract error"}`,
+    );
+  }
+
+  const commitment = isRustResultLike(result) ? result.unwrap() : result;
+  return normalizeBytesN32Hex(
+    commitment,
+    "Claim Registry researcher commitment",
+  );
 }
 
 export function decodeSubmitClaimArgsFromXdr(
@@ -262,4 +315,69 @@ function bytesHex(value: unknown): string | null {
     return Buffer.from(value).toString("hex");
   }
   return null;
+}
+
+function normalizeBytesN32Hex(value: unknown, label: string): string {
+  const hex =
+    typeof value === "string"
+      ? value.replace(/^0x/i, "").toLowerCase()
+      : bytesHex(value);
+
+  if (!hex || !/^[0-9a-f]{64}$/.test(hex)) {
+    throw new Error(`${label} must be exactly 32 bytes.`);
+  }
+
+  return hex;
+}
+
+function isRustResultLike(
+  value: unknown,
+): value is { isErr: () => boolean; unwrapErr: () => unknown; unwrap: () => unknown } {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const object = value as Record<string, unknown>;
+  return (
+    typeof object.isErr === "function" &&
+    typeof object.unwrap === "function"
+  );
+}
+
+function isResearcherNotRegisteredError(error: unknown): boolean {
+  const message = unknownErrorMessage(error).toLowerCase();
+  return (
+    message.includes("researchernotregistered") ||
+    message.includes("error(contract, #6)") ||
+    message.includes("error(contract, 6)") ||
+    message.includes("contract error #6") ||
+    message.includes("contract error 6") ||
+    message.includes("contract, #6") ||
+    message.includes("contract, 6")
+  );
+}
+
+function unknownErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error) ?? "";
+  } catch {
+    return "";
+  }
 }

@@ -38,6 +38,7 @@ import {
   createClaimRegistryClient,
   decodeSubmitClaimArgsFromXdr,
   readClaimRegistryRuntimeConfig,
+  resolveOnChainResearcherCommitment,
   type ClaimRegistryClient,
   type SubmitClaimSignedXdrReadiness,
 } from "@/lib/stellar/claim-registry-client";
@@ -287,12 +288,15 @@ function isStepComplete(index: number, step: number, draft: ClaimDraft, reviewed
   return false;
 }
 
-function publicInputRows(seal: NonNullable<ClaimDraft["privateSeal"]>) {
+export function publicInputRows(
+  seal: NonNullable<ClaimDraft["privateSeal"]>,
+  researcherCommitment = seal.researcherFingerprint,
+) {
   return [
     {
       position: 0,
       name: "researcher_commitment",
-      valueHex: seal.researcherFingerprint,
+      valueHex: researcherCommitment,
     },
     {
       position: 1,
@@ -567,6 +571,18 @@ export function signedTransactionMessage(error: unknown): string {
     normalized.includes("stellar rpc did not confirm")
   ) {
     return "The transaction was signed, but Stellar confirmation could not be completed. No receipt was created. Open Technical details before retrying.";
+  }
+
+  if (
+    normalized.includes("researchercommitmentmismatch") ||
+    normalized.includes("error(contract, #2)") ||
+    normalized.includes("error(contract, 2)") ||
+    normalized.includes("contract error #2") ||
+    normalized.includes("contract error 2") ||
+    normalized.includes("contract, #2") ||
+    normalized.includes("contract, 2")
+  ) {
+    return "Claim Registry identity mismatch. ZeroSeal could not reuse the researcher commitment already registered for this wallet.";
   }
 
   if (normalized.includes("hosterror") || normalized.includes("host error")) {
@@ -1603,23 +1619,29 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       storePublicReceipt(payload);
       setPublicPayload(payload);
 
-      const claim =
-        backendClaim ??
-        (await createBackendClaim({
-          walletAddress: address,
-          researcherCommitment: seal.researcherFingerprint,
-          nullifier: seal.nullifier,
-          evidenceCommitment: seal.privateEvidenceDigest,
-          publicInputs: publicInputRows(seal),
-          idempotencyKey: `${seal.claimIdentifier}:${address}`,
-        }));
-      setBackendClaim(claim);
-
       const runtimeConfig = readClaimRegistryRuntimeConfig();
       const client = await createClaimRegistryClient(address);
+      const researcherCommitment = await resolveOnChainResearcherCommitment(
+        client,
+        address,
+        seal.researcherFingerprint,
+      );
+      const claim =
+        backendClaim?.researcherCommitment === researcherCommitment
+          ? backendClaim
+          : await createBackendClaim({
+              walletAddress: address,
+              researcherCommitment,
+              nullifier: seal.nullifier,
+              evidenceCommitment: seal.privateEvidenceDigest,
+              publicInputs: publicInputRows(seal, researcherCommitment),
+              idempotencyKey: `${seal.claimIdentifier}:${address}:${researcherCommitment}`,
+            });
+      setBackendClaim(claim);
+
       const transaction = await client.submit_claim({
         researcher: address,
-        researcher_commitment: Buffer.from(seal.researcherFingerprint, "hex"),
+        researcher_commitment: Buffer.from(researcherCommitment, "hex"),
         claim_commitment: Buffer.from(seal.canonicalClaimHash, "hex"),
         nullifier: Buffer.from(seal.nullifier, "hex"),
       });
@@ -1642,7 +1664,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       if (
         review.wallet !== address ||
         review.contractId !== registryContractId ||
-        review.researcherCommitment !== seal.researcherFingerprint ||
+        review.researcherCommitment !== researcherCommitment ||
         review.claimCommitment !== seal.canonicalClaimHash ||
         review.nullifier !== seal.nullifier
       ) {
@@ -2024,7 +2046,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                   <div className="receipt-badge">Confirmed</div>
                   <dl>
                     <div><dt>Claim identifier</dt><dd><CopyableValue value={publicPayload?.claimIdentifier ?? seal?.claimIdentifier ?? ""} /></dd></div>
-                    <div><dt>Researcher commitment</dt><dd><CopyableValue value={seal?.researcherFingerprint ?? ""} /></dd></div>
+                    <div><dt>Researcher commitment</dt><dd><CopyableValue value={backendReceipt?.researcherCommitment ?? preparedReview?.researcherCommitment ?? seal?.researcherFingerprint ?? ""} /></dd></div>
                     <div><dt>Transaction hash</dt><dd><CopyableValue value={draft.receipt.transactionHash} /></dd></div>
                     <div><dt>Ledger</dt><dd>{draft.receipt.ledger ?? "Confirmed, ledger unavailable"}</dd></div>
                     {backendReceipt ? (

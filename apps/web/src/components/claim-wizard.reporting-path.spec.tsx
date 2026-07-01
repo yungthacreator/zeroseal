@@ -14,6 +14,7 @@ import {
   desktopContinuationUrl,
   signPreparedXdr,
   signedTransactionMessage,
+  publicInputRows,
   shouldClearWalletScopedState,
   validateFindingStep,
   validatePrivateEvidenceStep,
@@ -314,6 +315,45 @@ void test("stamp flow public labels avoid SDK preparation wording leaks", () => 
     signedTransactionMessage(new Error("HostError: Error(Contract, #6)")),
     "Stamp preparation failed.",
   );
+});
+
+void test("backend public inputs use resolved researcher commitment without replacing private fingerprint", () => {
+  const seal = {
+    claimIdentifier: "zs-test",
+    canonicalClaimHash: "aa".repeat(32),
+    privateEvidenceDigest: "bb".repeat(32),
+    saltHex: "private-salt-must-stay-local",
+    researcherFingerprint: "11".repeat(32),
+    nullifier: "cc".repeat(32),
+    recoveryBundle: {
+      schema: "zeroseal.private-recovery.v1" as const,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      privateEvidence: {
+        vulnerabilityDescription: "secret",
+        reproductionSteps: "secret",
+        proofOfConcept: "secret",
+        affectedCode: "",
+        screenshotsOrLogs: "",
+        expectedResult: "",
+        actualResult: "",
+        privateImpactValues: "",
+        privateNotes: "",
+      },
+      saltHex: "private-salt-must-stay-local",
+      canonicalClaimHash: "aa".repeat(32),
+      researcherFingerprint: "11".repeat(32),
+      nullifier: "cc".repeat(32),
+    },
+  };
+  const resolvedCommitment = "22".repeat(32);
+  const rows = publicInputRows(seal, resolvedCommitment);
+
+  assert.equal(seal.researcherFingerprint, "11".repeat(32));
+  assert.equal(rows[0]?.name, "researcher_commitment");
+  assert.equal(rows[0]?.valueHex, resolvedCommitment);
+  assert.equal(rows[1]?.valueHex, seal.canonicalClaimHash);
+  assert.equal(rows[2]?.valueHex, seal.nullifier);
+  assert.doesNotMatch(JSON.stringify(rows), /secret|private-salt-must-stay-local/);
 });
 
 void test("official ZeroSeal stamp renders confirmed receipt ledger and serial", () => {
