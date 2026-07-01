@@ -37,6 +37,6 @@ Single-screen, black-and-white interface with restrained Stellar-compatible acce
 
 ## Stop conditions
 
-Do not start the next milestone when the current acceptance criteria are not met.
+Do not start the next delivery step when the current acceptance criteria are not met.
 Do not replace failed verification with mocks.
 Do not claim integration with Immunefi, Sherlock, or Stellar Development Foundation.

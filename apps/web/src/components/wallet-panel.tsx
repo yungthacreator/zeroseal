@@ -23,6 +23,8 @@ export function WalletPanel() {
           ? "wrong network"
           : status === "rejected"
             ? "cancelled"
+            : status === "locked"
+              ? "locked"
         : address
           ? "connected"
           : "not connected";

@@ -6,6 +6,7 @@ import { HeroActions } from "@/components/hero-actions";
 import { HowItWorksTerminal } from "@/components/how-it-works-terminal";
 import { OnChainActivity } from "@/components/on-chain-activity";
 import { ProductStatusTerminal } from "@/components/product-status-terminal";
+import { RoadmapColumns } from "@/components/roadmap-columns";
 import { SiteHeader } from "@/components/site-header";
 import { StellarActivity } from "@/components/stellar-activity";
 import { UseCaseEngine } from "@/components/use-case-engine";
@@ -43,23 +44,23 @@ const TRUST_CONFLICTS = [
 
 const ZEROSEAL_STAGES = [
   {
-    title: "Private evidence",
+    title: "Report",
     text: "Report detail stays local.",
   },
   {
-    title: "Local seal",
+    title: "PoC",
     text: "A commitment is created in the browser.",
   },
   {
-    title: "Approved public claim",
+    title: "Notes",
     text: "Only selected fields move forward.",
   },
   {
-    title: "Threshold proof",
+    title: "Private Seal",
     text: "The current circuit checks the public threshold.",
   },
   {
-    title: "Stellar receipt",
+    title: "Verified Public Record",
     text: "A confirmed Testnet record can be inspected later.",
   },
 ] as const;
@@ -299,6 +300,22 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="section section--paper" id="roadmap">
+          <div className="shell">
+            <header className="section__head">
+              <p className="eyebrow">THE NEXT ZEROSEAL LAYER</p>
+              <h2 className="display display--lg">
+                Private security claims can become confidential settlement infrastructure.
+              </h2>
+              <p className="lede">
+                These capabilities are planned. Today, ZeroSeal provides claim
+                stamping, public receipts and receipt verification on Stellar Testnet.
+              </p>
+            </header>
+            <RoadmapColumns />
+          </div>
+        </section>
+
         <section className="section section--cream" id="product-status">
           <div className="shell">
             <header className="section__head">
@@ -338,11 +355,11 @@ export default function Home() {
               ))}
             </ul>
           </nav>
-          <nav className="footer__col" aria-label="Prototype status">
-            <h2>Prototype status</h2>
+          <nav className="footer__col" aria-label="Testnet status">
+            <h2>Testnet status</h2>
             <ul>
               <li>
-                <span>Research prototype running on Stellar Testnet.</span>
+                <span>ZeroSeal is running on Stellar Testnet with claim stamping, public receipts and receipt verification.</span>
               </li>
               <li>
                 <a href="#use-cases">Use cases</a>
@@ -351,7 +368,7 @@ export default function Home() {
           </nav>
         </div>
         <div className="shell footer__bottom">
-          <span>Research prototype running on Stellar Testnet.</span>
+          <span>ZeroSeal is live on Stellar Testnet.</span>
           <span>Copyright 2026 ZeroSeal</span>
           <span>Network TESTNET</span>
           <a href={explorerContractUrl(registryContractId)} target="_blank" rel="noreferrer">

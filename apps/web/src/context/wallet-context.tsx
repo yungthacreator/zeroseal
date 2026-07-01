@@ -28,6 +28,7 @@ type WalletState =
   | "unavailable"
   | "wrong_network"
   | "rejected"
+  | "locked"
   | "error";
 
 type WalletNetwork = {
@@ -67,13 +68,32 @@ function walletErrorMessage(error: unknown): string {
       normalized.includes("cancel") ||
       normalized.includes("denied")
     ) {
-      return "Wallet connection was cancelled.";
+      return "Connection rejected";
+    }
+
+    if (normalized.includes("lock") || normalized.includes("unlock")) {
+      return "Freighter is locked";
     }
 
     return message;
   }
 
   return "The wallet request could not be completed.";
+}
+
+function isLockedError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message
+        : "";
+
+  const normalized = message.toLowerCase();
+  return normalized.includes("lock") || normalized.includes("unlock");
 }
 
 function isRejectedError(error: unknown): boolean {
@@ -147,7 +167,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setStatus("unavailable");
         setError(
           connection.error?.message ??
-            "Freighter is not installed or is unavailable.",
+            "Freighter extension not detected",
         );
         return;
       }
@@ -205,7 +225,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (caught) {
       setAddress(null);
       setNetwork(null);
-      setStatus(isRejectedError(caught) ? "rejected" : "error");
+      setStatus(
+        isRejectedError(caught)
+          ? "rejected"
+          : isLockedError(caught)
+            ? "locked"
+            : "error",
+      );
       setError(walletErrorMessage(caught));
     } finally {
       connectingRef.current = false;

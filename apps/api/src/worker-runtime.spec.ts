@@ -9,6 +9,11 @@ import {
 } from "./worker-runtime";
 import { TRANSACTION_QUEUE, VERIFICATION_QUEUE } from "./tokens";
 
+void test("queue job ids avoid BullMQ separator characters", () => {
+  assert.equal(verificationQueueJobId("verification-job-1").includes(":"), false);
+  assert.equal(transactionQueueJobId("tx-1").includes(":"), false);
+});
+
 void test("worker runtime starts enabled embedded workers on the API queue names", async () => {
   const started: Array<{ name: string }> = [];
   class FakeWorker {

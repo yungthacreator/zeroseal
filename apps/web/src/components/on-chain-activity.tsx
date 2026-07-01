@@ -1,59 +1,42 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
-import { useWallet } from "@/context/wallet-context";
-import { getWalletActivity } from "@/lib/api/claims";
+import { getPublicReceipts, verifyReceiptHref } from "@/lib/api/claims";
 import { shortenAddress } from "@/lib/presentation";
-import { readReceipts, type StoredReceipt } from "@/lib/receipt-store";
 import {
   explorerTransactionUrl,
 } from "@/lib/stellar/testnet";
-
-type ApiActivityRow = {
-  id?: string;
-  transactionHash?: string;
-  status?: string;
-  ledgerNumber?: number | null;
-  sourceAccount?: string | null;
-  contractId?: string | null;
-  method?: string | null;
-  operationType?: string | null;
-  confirmedAt?: string | null;
-  submittedAt?: string | null;
-  claimId?: string | null;
-};
+import { ZeroSealStamp } from "@/components/zero-seal-stamp";
 
 type ActivityRow = {
-  source: "api" | "local";
   action: string;
   status: string;
   transactionHash: string;
   ledger: string | null;
   date: string | null;
-  sourceAccount: string | null;
-  contractId: string | null;
   claimId: string | null;
+  receiptId: string;
+  network: string;
 };
 
-const ACTION_LABELS: Record<StoredReceipt["action"], string> = {
-  register_researcher: "researcher registration",
-  submit_claim: "claim submission",
+const ACTION_LABELS: Record<string, string> = {
+  submit_claim: "Claim stamped",
   proof_acceptance: "proof acceptance",
   verification_payment: "XLM verification payment",
 };
 
 function actionLabel(action: string): string {
   return action in ACTION_LABELS
-    ? ACTION_LABELS[action as StoredReceipt["action"]]
+    ? ACTION_LABELS[action]
     : action.replaceAll("_", " ");
 }
 
 export function OnChainActivity() {
-  const { address } = useWallet();
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [state, setState] = useState<
-    "idle" | "loading" | "backend" | "fallback" | "unavailable"
+    "idle" | "loading" | "backend" | "unavailable"
   >("idle");
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -61,32 +44,25 @@ export function OnChainActivity() {
     let cancelled = false;
 
     const load = async () => {
-      if (!address) {
-        setRows([]);
-        setState("idle");
-        return;
-      }
-
       setState("loading");
 
       try {
-        const activity = await getWalletActivity(address);
-        const apiRows = Array.isArray(activity) ? (activity as ApiActivityRow[]) : [];
-        const nextRows = apiRows
+        const receipts = await getPublicReceipts();
+        const nextRows = (Array.isArray(receipts) ? receipts : [])
           .filter((row) => typeof row.transactionHash === "string")
+          .filter((row) => row.status === "CONFIRMED" || row.status === undefined)
           .map((row): ActivityRow => ({
-            source: "api",
-            action: row.method ?? row.operationType ?? "transaction",
-            status: row.status ?? "UNKNOWN",
+            action: row.actionLabel ?? row.method ?? "submit_claim",
+            status: "CONFIRMED",
             transactionHash: row.transactionHash ?? "",
             ledger:
               typeof row.ledgerNumber === "number"
                 ? String(row.ledgerNumber)
                 : null,
-            date: row.confirmedAt ?? row.submittedAt ?? null,
-            sourceAccount: row.sourceAccount ?? null,
-            contractId: row.contractId ?? null,
+            date: row.issuedAt ?? null,
             claimId: row.claimId ?? null,
+            receiptId: row.receiptId,
+            network: row.network,
           }));
 
         if (!cancelled) {
@@ -94,24 +70,9 @@ export function OnChainActivity() {
           setState("backend");
         }
       } catch {
-        const receipts = readReceipts(address);
-        const fallbackRows = receipts.map(
-          (receipt): ActivityRow => ({
-            source: "local",
-            action: receipt.action,
-            status: "LOCAL_CACHE",
-            transactionHash: receipt.transactionHash,
-            ledger: receipt.ledger ?? null,
-            date: receipt.confirmedAt ?? receipt.savedAt,
-            sourceAccount: receipt.sourceAccount ?? receipt.account,
-            contractId: receipt.contractId ?? null,
-            claimId: null,
-          }),
-        );
-
         if (!cancelled) {
-          setRows(fallbackRows);
-          setState(fallbackRows.length > 0 ? "fallback" : "unavailable");
+          setRows([]);
+          setState("unavailable");
         }
       }
     };
@@ -121,7 +82,7 @@ export function OnChainActivity() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, []);
 
   const visibleRows = useMemo(
     () =>
@@ -158,16 +119,10 @@ export function OnChainActivity() {
             <h2 className="display display--lg">Network activity and public receipts</h2>
           </div>
           <p className="lede">
-            ZeroSeal loads persisted wallet activity from the backend. Browser
-            cache is used only as a fallback when the API is unavailable.
+            ZeroSeal shows only confirmed and reconciled receipts from the
+            backend.
           </p>
         </header>
-
-        {state === "fallback" ? (
-          <p className="activity-empty">
-            Backend unavailable. Showing locally retained transaction metadata.
-          </p>
-        ) : null}
 
         {visibleRows.length > 0 ? (
           <div className="activity-table" role="table" aria-label="Verified ZeroSeal transactions">
@@ -185,7 +140,16 @@ export function OnChainActivity() {
                 role="row"
                 key={row.transactionHash}
               >
-                <span role="cell">{actionLabel(row.action)}</span>
+                <span role="cell" className="activity-table__action">
+                  <ZeroSealStamp
+                    receiptId={row.receiptId}
+                    ledgerNumber={Number(row.ledger ?? 0)}
+                    network={row.network}
+                    transactionHash={row.transactionHash}
+                    compact
+                  />
+                  {actionLabel(row.action)}
+                </span>
                 <span role="cell">{row.status}</span>
                 <span role="cell" className="mono" title={row.transactionHash}>
                   {shortenAddress(row.transactionHash)}
@@ -204,6 +168,12 @@ export function OnChainActivity() {
                   >
                     View transaction on Stellar Expert
                   </a>
+                  <Link href={`/receipt/${encodeURIComponent(row.receiptId)}`}>
+                    View stamped receipt
+                  </Link>
+                  <Link href={verifyReceiptHref(row.receiptId)}>
+                    Verify receipt
+                  </Link>
                   <button
                     type="button"
                     onClick={() => void copyHash(row.transactionHash)}
@@ -218,8 +188,8 @@ export function OnChainActivity() {
           <div className="activity-empty">
             <p>
               {state === "unavailable"
-                ? "Backend unavailable. No local transaction metadata was found."
-                : "No transaction has been submitted from this browser."}
+                ? "Receipt service is temporarily unavailable. No unverified records are being displayed."
+                : "No confirmed public receipts are available yet."}
             </p>
             <a className="btn btn--outline btn--sm" href="#proof-workspace">
               Open live workspace

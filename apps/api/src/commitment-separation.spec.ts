@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ProofService } from "./proof.service";
 import { sha256Hex } from "./validators";
 
 void test("identifier digests remain separate concepts", () => {
@@ -20,25 +19,23 @@ void test("identifier digests remain separate concepts", () => {
   assert.notEqual(transactionHash, receiptId);
 });
 
-void test("current proof artifact has no evidenceCommitment public input", async () => {
+void test("current public claim artifact has only submit_claim commitments", async () => {
   const { readFile } = await import("node:fs/promises");
   const { default: path } = await import("node:path");
   const artifactPath = path.resolve(
     process.cwd(),
     "../web/public/zeroseal/browser-claim.json",
   );
-  const artifact = JSON.parse(await readFile(artifactPath, "utf8")) as unknown;
-  const validated = new ProofService().validateArtifact(artifact);
-  const names = validated.publicInputs.map((input) => input.name);
+  const artifact = JSON.parse(await readFile(artifactPath, "utf8")) as {
+    arguments: Record<string, string>;
+  };
+  const names = Object.keys(artifact.arguments);
 
-  assert.deepEqual(names, [
-    "program_id",
-    "snapshot_id",
-    "impact_rule_id",
-    "minimum_loss",
-    "state_commitment",
-    "researcher_commitment",
+  assert.deepEqual(names.sort(), [
+    "claim_commitment",
     "nullifier",
+    "researcher",
+    "researcher_commitment",
   ]);
   assert.equal(names.includes("evidence_commitment"), false);
 });

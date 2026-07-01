@@ -9,7 +9,7 @@ const baseEnv = {
   STELLAR_RPC_URL: "https://soroban-testnet.stellar.org",
   STELLAR_HORIZON_URL: "https://horizon-testnet.stellar.org",
   STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
-  REGISTRY_CONTRACT_ID: "CBKQ3ZTUIOQLPQLZ5RUK237P6AGAJ4LGOQJNB2GVJHRFVNKENFIU622R",
+  REGISTRY_CONTRACT_ID: "CD6MKUVXB7ZTZQCGNMBVHMU4PGT2SEKS6Z5LF53HXDOAVCO3LGKGQ3JU",
   VERIFIER_CONTRACT_ID: "CABBWKKUU4PWWU5LSV2BPUMIEZR542V36WONDA2UT6OHXJWZAPXIKA2X",
   EXPLORER_TRANSACTION_BASE_URL: "https://stellar.expert/explorer/testnet/tx",
   EXPLORER_ACCOUNT_BASE_URL: "https://stellar.expert/explorer/testnet/account",
@@ -56,6 +56,7 @@ void test("config uses RENDER_EXTERNAL_URL as production API public URL", () => 
 
   assert.equal(parsed.API_PUBLIC_URL, "https://zeroseal-api.onrender.com");
   assert.equal(parsed.RUN_EMBEDDED_WORKER, true);
+  assert.equal(parsed.WORKER_REQUIRED_FOR_READY, false);
   assert.equal(parsed.REDIS_REQUIRED_FOR_READY, false);
   assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, ["https://zeroseal.vercel.app"]);
 });
@@ -69,6 +70,17 @@ void test("production readiness can explicitly require Redis", () => {
   });
 
   assert.equal(parsed.REDIS_REQUIRED_FOR_READY, true);
+});
+
+void test("readiness can explicitly require the embedded transaction worker", () => {
+  const parsed = configSchema.parse({
+    ...baseEnv,
+    NODE_ENV: "production",
+    CORS_ALLOWED_ORIGINS: "https://zeroseal.vercel.app",
+    WORKER_REQUIRED_FOR_READY: "true",
+  });
+
+  assert.equal(parsed.WORKER_REQUIRED_FOR_READY, true);
 });
 
 void test("production config does not invent a local API public URL", () => {

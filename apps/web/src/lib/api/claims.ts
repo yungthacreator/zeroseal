@@ -32,6 +32,8 @@ type RecordTransactionInput = {
   method: string;
   operationType: string;
   researcherCommitment?: string;
+  claimCommitment?: string;
+  nullifier?: string;
   idempotencyKey: string;
 };
 
@@ -64,10 +66,46 @@ export type ApiReceipt = {
   network: string;
   walletAddress: string;
   researcherCommitment: string;
+  claimCommitment: string | null;
   nullifier: string | null;
   policyIdentifier: string;
   issuedAt: string;
+  method?: string;
+  actionLabel?: string;
+  status?: string;
   explorerTransactionUrl: string;
+  explorerAccountUrl?: string;
+  explorerRegistryUrl?: string;
+  explorerVerifierUrl?: string;
+};
+
+export type ApiVerificationResult = {
+  status:
+    | "VERIFIED"
+    | "PENDING_CONFIRMATION"
+    | "FAILED"
+    | "NOT_FOUND"
+    | "INVALID"
+    | "MISMATCHED";
+  inputType: "receipt" | "claim" | "transaction" | "unknown";
+  identifier: string;
+  message: string;
+  receipt?: ApiReceipt | null;
+  transaction?: ApiTransaction | null;
+  chain?: {
+    hash: string;
+    successful: boolean;
+    ledger: number | null;
+    sourceAccount: string | null;
+    createdAt: string | null;
+    feeCharged: string | null;
+  } | null;
+  explorer?: {
+    transaction?: string;
+    account?: string;
+    registry?: string;
+    verifier?: string;
+  } | null;
 };
 
 export type ApiErrorState = {
@@ -232,8 +270,26 @@ export function getBackendReceipt(receiptId: string) {
   return request<ApiReceipt>(`/api/v1/receipts/${receiptId}`);
 }
 
+export function getPublicReceipts() {
+  return request<ApiReceipt[]>("/api/v1/receipts");
+}
+
 export function getBackendTransaction(transactionHash: string) {
   return request<ApiTransaction>(`/api/v1/transactions/${transactionHash}`);
+}
+
+export function verifyReceiptHref(receiptId: string) {
+  return `/verify?receipt=${encodeURIComponent(receiptId)}`;
+}
+
+export function verifyReceiptIdentifier(
+  identifier: string,
+  options: RequestInit = {},
+) {
+  return request<ApiVerificationResult>(
+    `/api/v1/verify/${encodeURIComponent(identifier)}`,
+    options,
+  );
 }
 
 export function getWalletActivity(address: string) {
@@ -252,9 +308,41 @@ export function getApiReadiness() {
   return request<Record<string, unknown>>("/ready");
 }
 
+export type ContinuationPublicPayload = {
+  claimIdentifier: string;
+  reportingContext: string;
+  programmeContext: string;
+  programmeHash: string;
+  targetSnapshotHash: string;
+  publicPolicyIdentifier: string;
+  publicPolicyVersion: string;
+  publicThreshold: string;
+  researcherFingerprint: string;
+  researcherPublicKey: string | null;
+  proofDigest: string;
+  nullifier: string;
+  verifierVersion: string;
+  verificationResult: "structural_only" | "verified";
+  network: "TESTNET";
+  timestamp: string;
+};
+
+export type ContinuationPublicClaim = {
+  reportingContext: string | null;
+  programmeName: string | null;
+  targetType: string | null;
+  targetLocator: string | null;
+  affectedComponent: string | null;
+  findingTitle: string | null;
+  bugCategory: string | null;
+  claimedSeverity: string | null;
+  impactStatement: string | null;
+  publicThreshold: string | null;
+};
+
 export type ContinuationPayload = {
-  publicPayload: unknown;
-  publicClaim: Record<string, string | null>;
+  publicPayload: ContinuationPublicPayload;
+  publicClaim: ContinuationPublicClaim;
   seal: {
     claimIdentifier: string;
     researcherFingerprint: string;

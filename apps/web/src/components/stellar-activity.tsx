@@ -50,7 +50,7 @@ const LIFECYCLE = [
 
 export function StellarActivity() {
   const { address, network, status } = useWallet();
-  const [registrationReceipt, setRegistrationReceipt] =
+  const [claimReceipt, setClaimReceipt] =
     useState<StoredReceipt | null>(null);
   const [apiState, setApiState] = useState<
     "idle" | "loading" | "ready" | "unavailable"
@@ -67,8 +67,8 @@ export function StellarActivity() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setRegistrationReceipt(
-        address ? readReceipt(address, "register_researcher") : null,
+      setClaimReceipt(
+        address ? readReceipt(address, "submit_claim") : null,
       );
     }, 0);
 
@@ -118,8 +118,8 @@ export function StellarActivity() {
   }, [address]);
 
   const connected = status === "connected" && Boolean(address);
-  const hasCommitment = Boolean(registrationReceipt?.commitment);
-  const hasRegistryReceipt = Boolean(registrationReceipt?.transactionHash);
+  const hasCommitment = Boolean(claimReceipt?.commitment);
+  const hasRegistryReceipt = Boolean(claimReceipt?.transactionHash);
 
   const stateByKey: Record<(typeof LIFECYCLE)[number]["key"], boolean> = {
     connect: connected,
@@ -134,7 +134,7 @@ export function StellarActivity() {
     typeof latestTransaction?.transactionHash === "string"
       ? latestTransaction.transactionHash
       : null;
-  const latestHash = apiHash ?? registrationReceipt?.transactionHash ?? null;
+  const latestHash = apiHash ?? claimReceipt?.transactionHash ?? null;
   const latestTransactionUrl = latestHash
     ? explorerTransactionUrl(latestHash)
     : null;
@@ -197,24 +197,24 @@ export function StellarActivity() {
             {apiStatus ??
               (apiState === "unavailable"
                 ? "Backend unavailable"
-                : registrationReceipt
+                : claimReceipt
                   ? "confirmed from retained receipt"
-                  : "No transaction has been submitted for this claim")}
+                : "No transaction has been submitted for this claim")}
           </dd>
         </div>
         <div>
           <dt>Latest transaction hash</dt>
-          <dd title={apiHash ?? registrationReceipt?.transactionHash ?? undefined}>
+          <dd title={apiHash ?? claimReceipt?.transactionHash ?? undefined}>
             {apiHash
               ? shortenAddress(apiHash)
-              : registrationReceipt?.transactionHash
-                ? shortenAddress(registrationReceipt.transactionHash)
+              : claimReceipt?.transactionHash
+                ? shortenAddress(claimReceipt.transactionHash)
                 : "No transaction has been submitted for this claim"}
           </dd>
         </div>
         <div>
           <dt>Latest ledger</dt>
-          <dd>{apiLedger ?? registrationReceipt?.ledger ?? "No ledger yet"}</dd>
+          <dd>{apiLedger ?? claimReceipt?.ledger ?? "No ledger yet"}</dd>
         </div>
         <div>
           <dt>Current network</dt>

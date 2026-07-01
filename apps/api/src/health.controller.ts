@@ -2,8 +2,17 @@ import { Controller, Get, Inject, ServiceUnavailableException } from "@nestjs/co
 
 import type { ApiConfig } from "./config";
 import { PrismaService } from "./prisma.service";
-import { checkRedisReady } from "./readiness";
+import { checkRedisReady, checkStellarRpcReady } from "./readiness";
 import { CONFIG } from "./tokens";
+
+export type WorkerReadiness = "not_required" | "ready" | "unavailable";
+
+export function getWorkerReadiness(config: Pick<ApiConfig, "RUN_EMBEDDED_WORKER" | "WORKER_REQUIRED_FOR_READY">): WorkerReadiness {
+  if (config.RUN_EMBEDDED_WORKER) {
+    return "ready";
+  }
+  return config.WORKER_REQUIRED_FOR_READY ? "unavailable" : "not_required";
+}
 
 @Controller()
 export class HealthController {
@@ -24,8 +33,11 @@ export class HealthController {
   @Get("/ready")
   async ready() {
     const checks = {
+      api: "alive",
       database: "unknown",
       redis: "optional" as "optional" | "ready" | "unavailable",
+      stellarRpc: "unknown",
+      worker: getWorkerReadiness(this.config),
     };
 
     try {
@@ -51,6 +63,26 @@ export class HealthController {
           checks,
         });
       }
+    }
+
+    try {
+      await checkStellarRpcReady(this.config.STELLAR_RPC_URL);
+      checks.stellarRpc = "ready";
+    } catch {
+      checks.stellarRpc = "unavailable";
+      throw new ServiceUnavailableException({
+        code: "SERVICE_DEPENDENCY_UNAVAILABLE",
+        message: "Stellar RPC is not ready.",
+        checks,
+      });
+    }
+
+    if (checks.worker === "unavailable") {
+      throw new ServiceUnavailableException({
+        code: "SERVICE_DEPENDENCY_UNAVAILABLE",
+        message: "Worker is required for transaction reconciliation but is not running.",
+        checks,
+      });
     }
 
     return {

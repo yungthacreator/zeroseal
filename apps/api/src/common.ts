@@ -16,6 +16,7 @@ export type ApiErrorBody = {
     code: string;
     message: string;
     requestId?: string;
+    checks?: unknown;
   };
 };
 
@@ -65,14 +66,26 @@ export class SafeExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      const response = exception.getResponse();
+      const structured =
+        response && typeof response === "object"
+          ? (response as { code?: unknown; message?: unknown; checks?: unknown })
+          : null;
       const body: ApiErrorBody = {
         error: {
-          code: "HTTP_ERROR",
+          code:
+            typeof structured?.code === "string"
+              ? structured.code
+              : "HTTP_ERROR",
           message:
+            typeof structured?.message === "string"
+              ? structured.message
+              :
             status >= 500
               ? "The request could not be completed."
               : exception.message,
           requestId: req.requestId,
+          checks: structured?.checks,
         },
       };
       res.status(status).json(body);

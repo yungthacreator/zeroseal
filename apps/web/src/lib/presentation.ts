@@ -10,6 +10,7 @@ export type WalletStatus =
   | "unavailable"
   | "wrong_network"
   | "rejected"
+  | "locked"
   | "error";
 
 export function shortenAddress(address: string): string {
@@ -39,7 +40,9 @@ export function walletStatusCopy(status: WalletStatus): StatusCopy {
     case "wrong_network":
       return { label: "Wrong network", tone: "danger" };
     case "rejected":
-      return { label: "Connection cancelled", tone: "warn" };
+      return { label: "Connection rejected", tone: "warn" };
+    case "locked":
+      return { label: "Freighter locked", tone: "warn" };
     case "error":
       return { label: "Permission required", tone: "danger" };
     default:

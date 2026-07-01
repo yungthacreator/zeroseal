@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { resolve } from "node:path";
 import test from "node:test";
 
-const root = join(process.cwd(), "..");
+const repositoryRoot = resolve(__dirname, "../../..");
 
 function readWebFile(path: string): string {
-  return readFileSync(join(root, "web", path), "utf8");
+  return readFileSync(resolve(repositoryRoot, "apps/web", path), "utf8");
 }
 
 void test("homepage keeps the competition-ready product section order", () => {
@@ -57,6 +57,9 @@ void test("homepage exposes focused routes and restores a clean workspace previe
   assert.match(createRoute, /ClaimWizard mode="create"/);
   assert.match(demoRoute, /ClaimWizard mode="demo"/);
   assert.match(verifyRoute, /Check a ZeroSeal receipt/);
+  assert.match(verifyRoute, /verifyReceiptIdentifier/);
+  assert.match(verifyRoute, /Pending confirmation/);
+  assert.match(verifyRoute, /Invalid or mismatched/);
 });
 
 void test("walkthrough controls are compact icons and ecosystem logos move", () => {
@@ -72,18 +75,19 @@ void test("walkthrough controls are compact icons and ecosystem logos move", () 
   assert.match(walkthrough, /<svg viewBox="0 0 24 24"/);
   assert.doesNotMatch(walkthrough, />Start</);
   assert.doesNotMatch(walkthrough, />Previous</);
-  assert.match(component, /MarqueeTrack/);
-  assert.match(component, /credibility-marquee__motion/);
+  assert.match(component, /function Track/);
+  assert.match(component, /zs-marquee__motion/);
   assert.match(css, /@keyframes\s+ecosystemScroll/);
   assert.match(paths, /hackerone\.svg/);
-  assert.match(component, /REPORTING_PATHS/);
-  assert.match(component, /shortCategory/);
+  assert.match(component, /PLATFORMS/);
+  assert.match(component, /zs-marquee__logo/);
+  assert.match(component, /zs-marquee__word/);
   assert.match(paths, /cantina\.svg/);
   assert.match(stamp, /<path/);
   assert.doesNotMatch(stamp, /linear-gradient|rotate\(45deg\)|rotate\(-45deg\)/);
 });
 
-void test("Try ZeroSeal copy avoids preloaded or toy-like language", () => {
+void test("Try ZeroSeal copy avoids preloaded or belittling language", () => {
   const wizard = readWebFile("src/components/claim-wizard.tsx");
   const walkthrough = readWebFile("src/components/guided-proof-demo.tsx");
   const workspace = readWebFile("src/components/compact-claim-workspace.tsx");
@@ -108,7 +112,10 @@ void test("Try ZeroSeal copy avoids preloaded or toy-like language", () => {
 void test("claim creator is a five-step product flow with mobile continuation", () => {
   const wizard = readWebFile("src/components/claim-wizard.tsx");
   const apiClient = readWebFile("src/lib/api/claims.ts");
-  const controller = readFileSync(join(root, "api", "src/claims.controller.ts"), "utf8");
+  const controller = readFileSync(
+    resolve(repositoryRoot, "apps/api/src/claims.controller.ts"),
+    "utf8",
+  );
 
   assert.match(wizard, /"Report"/);
   assert.match(wizard, /"Finding"/);
@@ -116,13 +123,15 @@ void test("claim creator is a five-step product flow with mobile continuation", 
   assert.match(wizard, /"Seal and public claim"/);
   assert.match(wizard, /"Sign and receipt"/);
   assert.doesNotMatch(wizard, /"Testnet action"/);
-  assert.match(wizard, /Continue signing on desktop/);
+  assert.match(wizard, /Continue securely on desktop/);
   assert.match(wizard, /Copy desktop continuation link/);
   assert.match(wizard, /createBackendContinuation/);
   assert.match(wizard, /getBackendContinuation/);
   assert.doesNotMatch(wizard, /sessionStorage/);
   assert.match(wizard, /createBackendClaim/);
   assert.match(wizard, /recordBackendTransaction/);
+  assert.match(wizard, /getApiReadiness/);
+  assert.match(wizard, /Backend readiness failed/);
   assert.match(apiClient, /class ApiRequestError extends Error/);
   assert.match(controller, /continuations/);
 });
@@ -151,7 +160,7 @@ void test("shared reporting paths cover all required options", () => {
   }
 
   assert.match(workspace, /REPORTING_PATHS/);
-  assert.match(wizard, /REPORTING_PATHS/);
+  assert.match(wizard, /REPORTING_CONTEXTS/);
   assert.match(workspace, /"Low", "Medium", "High", "Critical"/);
   assert.match(workspace, /aria-pressed/);
 });
@@ -162,15 +171,16 @@ void test("frontend API client rejects localhost production configuration", () =
   assert.match(apiClient, /API_MISCONFIGURED/);
   assert.match(apiClient, /Production API cannot point to localhost/);
   assert.match(apiClient, /localhost\|127\\\.0\\\.0\\\.1\|0\\\.0\\\.0\\\.0/);
+  assert.match(apiClient, /verifyReceiptIdentifier/);
 });
 
-void test("receipt page checks backend state before local fallback", () => {
+void test("receipt page shows only confirmed backend receipts", () => {
   const receiptPage = readWebFile("src/app/receipt/[transactionHash]/page.tsx");
 
   assert.match(receiptPage, /getBackendReceipt/);
-  assert.match(receiptPage, /getBackendTransaction/);
   assert.match(receiptPage, /backend-receipt/);
-  assert.match(receiptPage, /No confirmed transaction yet/);
+  assert.doesNotMatch(receiptPage, /public-claim/);
+  assert.doesNotMatch(receiptPage, /getBackendTransaction/);
 });
 
 void test("trust gap section is a two-party bridge, not a generic card stack", () => {
@@ -180,7 +190,7 @@ void test("trust gap section is a two-party bridge, not a generic card stack", (
   assert.match(page, /trust-gap__bridge/);
   assert.match(page, /Researcher/);
   assert.match(page, /Security programme/);
-  assert.match(page, /Close the trust gap before the exploit moves/);
+  assert.match(page, /Close the gap before the exploit moves/);
   assert.match(page, /Early disclosure/);
   assert.match(css, /trust-gap__bridge/);
 });

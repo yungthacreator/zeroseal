@@ -34,3 +34,36 @@ export async function checkRedisReady(
     }
   }
 }
+
+export async function checkStellarRpcReady(rpcUrl: string): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "zeroseal-ready",
+        method: "getHealth",
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Stellar RPC returned HTTP ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as {
+      result?: { status?: string };
+      error?: unknown;
+    };
+
+    if (payload.error || !payload.result) {
+      throw new Error("Stellar RPC readiness check failed.");
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}

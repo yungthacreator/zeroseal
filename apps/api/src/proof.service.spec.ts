@@ -3,35 +3,29 @@ import test from "node:test";
 
 import { ProofService } from "./proof.service";
 
-void test("ProofService validates the supported browser claim artifact", async () => {
+void test("public browser claim artifact contains only deadline-safe submit_claim metadata", async () => {
   const { readFile } = await import("node:fs/promises");
   const { default: path } = await import("node:path");
   const artifactPath = path.resolve(
     process.cwd(),
     "../web/public/zeroseal/browser-claim.json",
   );
-  const artifact = JSON.parse(await readFile(artifactPath, "utf8")) as unknown;
+  const artifactText = await readFile(artifactPath, "utf8");
+  const artifact = JSON.parse(artifactText) as {
+    schema: string;
+    method: string;
+    arguments: Record<string, string>;
+  };
 
-  const validated = new ProofService().validateArtifact(artifact);
-
-  assert.equal(validated.schemaVersion, "zeroseal.browser-claim.v1");
-  assert.equal(validated.proofEncoding, "hex");
-  assert.equal(validated.publicInputByteLength, 224);
-  assert.equal(validated.researcherCommitment.length, 64);
-  assert.equal(validated.nullifier.length, 64);
-  assert.equal(validated.publicInputs.length, 7);
-  assert.deepEqual(
-    validated.publicInputs.map((input) => input.name),
-    [
-      "program_id",
-      "snapshot_id",
-      "impact_rule_id",
-      "minimum_loss",
-      "state_commitment",
-      "researcher_commitment",
-      "nullifier",
-    ],
-  );
+  assert.equal(artifact.schema, "zeroseal.browser-claim.v2");
+  assert.equal(artifact.method, "submit_claim");
+  assert.deepEqual(Object.keys(artifact.arguments).sort(), [
+    "claim_commitment",
+    "nullifier",
+    "researcher",
+    "researcher_commitment",
+  ]);
+  assert.doesNotMatch(artifactText, /proof_hex|proof_bytes|public_inputs_hex|vulnerability description/i);
 });
 
 void test("ProofService rejects artifacts with unsupported public input shape", () => {

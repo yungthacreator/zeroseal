@@ -54,11 +54,11 @@ export type QueueRecoveryOptions = {
 const logger = new Logger("ZeroSealWorkerRuntime");
 
 export function verificationQueueJobId(jobId: string): string {
-  return `verify-claim:${jobId}`;
+  return `verify-claim-${jobId}`;
 }
 
 export function transactionQueueJobId(transactionId: string): string {
-  return `reconcile-transaction:${transactionId}`;
+  return `reconcile-transaction-${transactionId}`;
 }
 
 export async function recoverQueueJobs({

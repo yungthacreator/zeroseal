@@ -66,6 +66,8 @@ export const recordTransactionSchema = z
     method: z.string().min(1),
     operationType: z.string().min(1),
     researcherCommitment: hex64.optional(),
+    claimCommitment: hex64.optional(),
+    nullifier: hex64.optional(),
     idempotencyKey: z.string().min(8).max(128),
   })
   .strict();
