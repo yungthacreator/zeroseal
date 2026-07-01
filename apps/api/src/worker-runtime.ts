@@ -21,7 +21,7 @@ type WorkerConstructor = new (
 ) => WorkerInstance;
 
 type QueueInstance = {
-  add: (name: string, data: unknown, options: { jobId: string }) => Promise<unknown>;
+  add: (name: string, data: unknown, options: unknown) => Promise<unknown>;
   close: () => Promise<unknown>;
 };
 
@@ -59,6 +59,39 @@ export function verificationQueueJobId(jobId: string): string {
 
 export function transactionQueueJobId(transactionId: string): string {
   return `reconcile-transaction-${transactionId}`;
+}
+
+export function transactionQueueJobOptions(transactionId: string) {
+  return {
+    jobId: transactionQueueJobId(transactionId),
+    attempts: 12,
+    backoff: {
+      type: "exponential" as const,
+      delay: 2000,
+    },
+    removeOnComplete: true,
+    removeOnFail: false,
+  };
+}
+
+export class RetryableTransactionReconciliationError extends Error {
+  constructor(transactionId: string, status: string) {
+    super(`Transaction reconciliation is still ${status}; retry ${transactionId}.`);
+    this.name = "RetryableTransactionReconciliationError";
+  }
+}
+
+export function shouldRetryTransactionReconciliationStatus(
+  status: unknown,
+): status is Extract<
+  ChainTransactionStatus,
+  "SUBMITTED" | "PENDING" | "UNKNOWN"
+> {
+  return (
+    status === ChainTransactionStatus.SUBMITTED ||
+    status === ChainTransactionStatus.PENDING ||
+    status === ChainTransactionStatus.UNKNOWN
+  );
 }
 
 export async function recoverQueueJobs({
@@ -134,7 +167,7 @@ export async function recoverQueueJobs({
       await transactionQueue.add(
         "reconcile-transaction",
         { transactionId: transaction.id },
-        { jobId: transactionQueueJobId(transaction.id) },
+        transactionQueueJobOptions(transaction.id),
       );
     }
 
@@ -227,7 +260,13 @@ export async function startWorkerRuntime({
         return undefined;
       }
       const transactionId = String(job.data.transactionId);
-      await transactions.reconcile(transactionId);
+      const result = await transactions.reconcile(transactionId);
+      if (shouldRetryTransactionReconciliationStatus(result.status)) {
+        throw new RetryableTransactionReconciliationError(
+          transactionId,
+          result.status,
+        );
+      }
       logger.log(`Processed transaction reconciliation job ${transactionId}.`);
       return undefined;
     },

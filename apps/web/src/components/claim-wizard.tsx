@@ -14,9 +14,11 @@ import {
   getApiReadiness,
   getBackendContinuation,
   getBackendClaimReceipt,
-  getBackendTransaction,
+  reconcileBackendTransaction,
   recordBackendTransaction,
+  ApiRequestError,
   type ApiClaim,
+  type ApiReconciliationResponse,
   type ApiReceipt,
   type ContinuationPayload,
   verifyReceiptHref,
@@ -70,8 +72,20 @@ type PendingTransaction = {
   claimId: string;
   transactionHash: string;
   ledger: string | null;
-  payload: PublicPayload;
+  payload?: PublicPayload;
   review: PreparedReview;
+};
+
+type PendingReceiptSync = {
+  schemaVersion: 1;
+  claimId: string;
+  transactionHash: string;
+  walletAddress: string;
+  ledger: string | null;
+  contractId: string;
+  researcherCommitment: string;
+  claimCommitment: string;
+  nullifier: string;
 };
 
 type PreparedSubmitClaimTransaction = Awaited<ReturnType<ClaimRegistryClient["submit_claim"]>>;
@@ -310,6 +324,224 @@ export function publicInputRows(
       valueHex: seal.nullifier,
     },
   ];
+}
+
+const PENDING_RECEIPT_SYNC_STORAGE_KEY = "zeroseal:pending-receipt-sync:v1";
+const RECONCILIATION_RETRY_DELAYS_MS = [
+  0,
+  1500,
+  2500,
+  4000,
+  6000,
+  8000,
+  8000,
+  8000,
+  8000,
+  8000,
+  8000,
+] as const;
+const RECONCILIATION_MAX_WAIT_MS = 60_000;
+const RETRYABLE_RECONCILIATION_CODES = new Set([
+  "SUBMIT_CLAIM_NOT_FOUND",
+  "TRANSACTION_NOT_FOUND",
+]);
+const NON_RETRYABLE_RECONCILIATION_CODES = new Set([
+  "TRANSACTION_NOT_SUCCESSFUL",
+  "TRANSACTION_SOURCE_MISMATCH",
+  "REGISTRY_CONTRACT_MISMATCH",
+  "CLAIM_WALLET_MISMATCH",
+  "RESEARCHER_COMMITMENT_MISMATCH",
+  "CLAIM_COMMITMENT_MISMATCH",
+  "NULLIFIER_MISMATCH",
+]);
+const RETRYABLE_TRANSACTION_STATUSES = new Set(["SUBMITTED", "PENDING", "UNKNOWN"]);
+
+function pendingReceiptSyncFromTransaction(
+  transaction: PendingTransaction,
+  walletAddress: string,
+): PendingReceiptSync {
+  return {
+    schemaVersion: 1,
+    claimId: transaction.claimId,
+    transactionHash: transaction.transactionHash,
+    walletAddress,
+    ledger: transaction.ledger,
+    contractId: transaction.review.contractId,
+    researcherCommitment: transaction.review.researcherCommitment,
+    claimCommitment: transaction.review.claimCommitment,
+    nullifier: transaction.review.nullifier,
+  };
+}
+
+function pendingReceiptSyncToTransaction(
+  pending: PendingReceiptSync,
+): PendingTransaction {
+  return {
+    claimId: pending.claimId,
+    transactionHash: pending.transactionHash,
+    ledger: pending.ledger,
+    review: {
+      wallet: pending.walletAddress,
+      contractId: pending.contractId,
+      method: "submit_claim",
+      researcherCommitment: pending.researcherCommitment,
+      claimCommitment: pending.claimCommitment,
+      nullifier: pending.nullifier,
+      simulatedFee: "",
+      feeStroops: "",
+      feeXlm: "",
+      signableXdr: "",
+    },
+  };
+}
+
+export function readPendingReceiptSync(
+  walletAddress?: string | null,
+): PendingReceiptSync | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(PENDING_RECEIPT_SYNC_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<PendingReceiptSync>;
+    if (
+      parsed.schemaVersion !== 1 ||
+      !parsed.claimId ||
+      !parsed.transactionHash ||
+      !parsed.walletAddress ||
+      !parsed.contractId ||
+      !parsed.researcherCommitment ||
+      !parsed.claimCommitment ||
+      !parsed.nullifier
+    ) {
+      return null;
+    }
+
+    if (walletAddress && parsed.walletAddress !== walletAddress) {
+      return null;
+    }
+
+    return {
+      schemaVersion: 1,
+      claimId: parsed.claimId,
+      transactionHash: parsed.transactionHash,
+      walletAddress: parsed.walletAddress,
+      ledger: parsed.ledger ?? null,
+      contractId: parsed.contractId,
+      researcherCommitment: parsed.researcherCommitment,
+      claimCommitment: parsed.claimCommitment,
+      nullifier: parsed.nullifier,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writePendingReceiptSync(pending: PendingReceiptSync): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(
+    PENDING_RECEIPT_SYNC_STORAGE_KEY,
+    JSON.stringify(pending),
+  );
+}
+
+export function clearPendingReceiptSync(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(PENDING_RECEIPT_SYNC_STORAGE_KEY);
+}
+
+function isRetryableReconciliationStatus(status: string | null | undefined): boolean {
+  return Boolean(status && RETRYABLE_TRANSACTION_STATUSES.has(status));
+}
+
+function isRetryableReconciliationError(error: unknown): boolean {
+  if (error instanceof ApiRequestError) {
+    if (NON_RETRYABLE_RECONCILIATION_CODES.has(error.code)) {
+      return false;
+    }
+    return (
+      RETRYABLE_RECONCILIATION_CODES.has(error.code) ||
+      error.status === 404
+    );
+  }
+  return false;
+}
+
+function reconciliationStatus(
+  response: ApiReconciliationResponse,
+): string | null {
+  return response.transaction?.status ?? response.status ?? null;
+}
+
+export async function reconcileUntilReceipt({
+  transactionHash,
+  claimId,
+  reconcile = reconcileBackendTransaction,
+  getReceipt = getBackendClaimReceipt,
+  wait = sleep,
+  retryDelays = RECONCILIATION_RETRY_DELAYS_MS,
+  maxWaitMs = RECONCILIATION_MAX_WAIT_MS,
+}: {
+  transactionHash: string;
+  claimId: string;
+  reconcile?: (transactionHash: string) => Promise<ApiReconciliationResponse>;
+  getReceipt?: (claimId: string) => Promise<ApiReceipt>;
+  wait?: (ms: number) => Promise<void>;
+  retryDelays?: readonly number[];
+  maxWaitMs?: number;
+}): Promise<ApiReceipt> {
+  let elapsedMs = 0;
+
+  for (let attempt = 0; attempt < retryDelays.length && elapsedMs <= maxWaitMs; attempt += 1) {
+    const delay = retryDelays[attempt] ?? retryDelays[retryDelays.length - 1] ?? 0;
+    if (delay > 0) {
+      await wait(delay);
+      elapsedMs += delay;
+    }
+
+    try {
+      const response = await reconcile(transactionHash);
+      if (response.receipt) {
+        return response.receipt;
+      }
+
+      const status = reconciliationStatus(response);
+      if (status === "FAILED") {
+        throw new Error("Stellar Testnet reported the transaction as failed. No receipt was issued.");
+      }
+
+      try {
+        return await getReceipt(claimId);
+      } catch (receiptError) {
+        if (!isRetryableReconciliationError(receiptError)) {
+          throw receiptError;
+        }
+      }
+
+      if (
+        !isRetryableReconciliationStatus(status) &&
+        status !== "RECONCILED" &&
+        status !== "CONFIRMED"
+      ) {
+        continue;
+      }
+    } catch (error) {
+      if (!isRetryableReconciliationError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("The Stellar transaction is preserved. Receipt finalisation is delayed.");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -1168,6 +1400,30 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
   }, [address]);
 
   useEffect(() => {
+    if (!address || pendingTransaction || backendReceipt) {
+      return;
+    }
+
+    const pending = readPendingReceiptSync(address);
+    if (!pending) {
+      return;
+    }
+
+    const transaction = pendingReceiptSyncToTransaction(pending);
+    setPendingTransaction(transaction);
+    setPublishState("backend_sync_failed");
+    setStep(4);
+    setDraft((current) => ({
+      ...current,
+      receipt: {
+        transactionHash: pending.transactionHash,
+        ledger: pending.ledger,
+      },
+    }));
+    setMessage("The Stellar transaction is preserved. Receipt finalisation is delayed.");
+  }, [address, backendReceipt, pendingTransaction]);
+
+  useEffect(() => {
     const token = searchParams.get("continue")?.trim();
     if (!token) {
       return;
@@ -1414,7 +1670,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       contractFunction: "submit_claim",
       commitment: transaction.review.researcherCommitment,
       nullifier: transaction.review.nullifier,
-      receiptId: transaction.payload.claimIdentifier,
+      receiptId: transaction.payload?.claimIdentifier ?? transaction.claimId,
       confirmedAt: null,
       savedAt: new Date().toISOString(),
     });
@@ -1433,7 +1689,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
     }
 
     setPublishState("confirming");
-    setMessage("Transaction hash preserved. Waiting for backend reconciliation and Testnet confirmation.");
+    setMessage("Stellar confirmed your transaction. ZeroSeal is finalising the receipt.");
+    writePendingReceiptSync(pendingReceiptSyncFromTransaction(transaction, address));
+    setPendingTransaction(transaction);
 
     await recordBackendTransaction(transaction.claimId, {
       transactionHash: transaction.transactionHash,
@@ -1454,34 +1712,11 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       ]),
     });
 
-    let transactionRecord = await getBackendTransaction(transaction.transactionHash);
-    for (let attempt = 0; attempt < 24 && transactionRecord.status !== "CONFIRMED"; attempt += 1) {
-      if (transactionRecord.status === "FAILED") {
-        throw new Error("Stellar Testnet reported the transaction as failed. No receipt was issued.");
-      }
-      await sleep(2500);
-      transactionRecord = await getBackendTransaction(transaction.transactionHash);
-    }
-
-    if (transactionRecord.status !== "CONFIRMED") {
-      throw new Error("ZeroSeal recorded the transaction hash, but confirmation is still pending. Retry backend sync.");
-    }
-
     setPublishState("issuing_receipt");
-    setMessage("Testnet confirmation found. Issuing the ZeroSeal receipt.");
-
-    let receipt: ApiReceipt | null = null;
-    for (let attempt = 0; attempt < 12 && !receipt; attempt += 1) {
-      try {
-        receipt = await getBackendClaimReceipt(transaction.claimId);
-      } catch {
-        await sleep(2000);
-      }
-    }
-
-    if (!receipt) {
-      throw new Error("The transaction is confirmed, but the backend receipt is not available yet. Retry backend sync.");
-    }
+    const receipt = await reconcileUntilReceipt({
+      transactionHash: transaction.transactionHash,
+      claimId: transaction.claimId,
+    });
 
     setBackendReceipt(receipt);
     setDraft((current) => ({
@@ -1493,7 +1728,9 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       },
     }));
     setPublishState("confirmed");
-    setMessage("Receipt ready. ZeroSeal verified the backend record and confirmed Stellar ledger.");
+    setPendingTransaction(null);
+    clearPendingReceiptSync();
+    setMessage("Receipt ready. ZeroSeal confirmed the Stellar ledger and issued the public receipt.");
   };
 
   const approvePreparedTransaction = async () => {
@@ -2057,7 +2294,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
               />
               {draft.receipt?.transactionHash ? (
                 <div className="claim-receipt">
-                  <div className="receipt-badge">Confirmed</div>
+                  <div className="receipt-badge">{backendReceipt ? "Confirmed" : "Receipt finalising"}</div>
                   <dl>
                     <div><dt>Claim identifier</dt><dd><CopyableValue value={publicPayload?.claimIdentifier ?? seal?.claimIdentifier ?? ""} /></dd></div>
                     <div><dt>Researcher commitment</dt><dd><CopyableValue value={backendReceipt?.researcherCommitment ?? preparedReview?.researcherCommitment ?? seal?.researcherFingerprint ?? ""} /></dd></div>
@@ -2070,8 +2307,18 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
                     <div><dt>Registry contract</dt><dd><CopyableValue value={registryContractId} /></dd></div>
                   </dl>
                   <div className="claim-step__actions">
-                    <Link className="btn btn--primary btn--sm" href={`/receipt/${draft.receipt.transactionHash}`}>Open receipt page</Link>
+                    {backendReceipt ? (
+                      <Link className="btn btn--primary btn--sm" href={`/receipt/${draft.receipt.transactionHash}`}>Open receipt page</Link>
+                    ) : null}
+                    {pendingTransaction ? (
+                      <button className="btn btn--primary btn--sm" type="button" onClick={() => void publish()}>
+                        Retry receipt sync
+                      </button>
+                    ) : null}
                     <a className="btn btn--outline btn--sm" href={explorerTransactionUrl(draft.receipt.transactionHash)} target="_blank" rel="noreferrer">Open Stellar explorer</a>
+                    <button className="btn btn--outline btn--sm" type="button" onClick={() => navigator.clipboard?.writeText(draft.receipt?.transactionHash ?? "")}>
+                      Copy transaction hash
+                    </button>
                     {backendReceipt ? (
                       <Link className="btn btn--outline btn--sm" href={verifyReceiptHref(backendReceipt.receiptId)}>Verify this receipt</Link>
                     ) : null}

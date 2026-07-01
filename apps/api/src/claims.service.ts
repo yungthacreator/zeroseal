@@ -22,7 +22,7 @@ import {
 } from "./claims.schemas";
 import { Queue, type ConnectionOptions } from "bullmq";
 import {
-  transactionQueueJobId,
+  transactionQueueJobOptions,
   verificationQueueJobId,
 } from "./worker-runtime";
 
@@ -497,7 +497,7 @@ export class ClaimsService {
     await this.transactionQueue.add(
       "reconcile-transaction",
       { transactionId: txRecord.id },
-      { jobId: transactionQueueJobId(txRecord.id) },
+      transactionQueueJobOptions(txRecord.id),
     );
     return txRecord;
   }

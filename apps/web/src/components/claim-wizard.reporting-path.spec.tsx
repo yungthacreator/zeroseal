@@ -11,17 +11,26 @@ import {
   ReportingPathSelector,
   clearWalletScopedDraftState,
   clearedWalletRuntimeState,
+  clearPendingReceiptSync,
   desktopContinuationUrl,
   signPreparedXdr,
   signedTransactionMessage,
   publicInputRows,
+  readPendingReceiptSync,
+  reconcileUntilReceipt,
   shouldClearWalletScopedState,
   validateFindingStep,
   validatePrivateEvidenceStep,
   validateReportStep,
+  writePendingReceiptSync,
 } from "./claim-wizard";
 import { ZeroSealStamp } from "./zero-seal-stamp";
-import { verifyReceiptHref, type ApiVerificationResult } from "../lib/api/claims";
+import {
+  ApiRequestError,
+  verifyReceiptHref,
+  type ApiReceipt,
+  type ApiVerificationResult,
+} from "../lib/api/claims";
 import {
   VerificationResultCard,
   pickAutoVerificationIdentifier,
@@ -354,6 +363,162 @@ void test("backend public inputs use resolved researcher commitment without repl
   assert.equal(rows[1]?.valueHex, seal.canonicalClaimHash);
   assert.equal(rows[2]?.valueHex, seal.nullifier);
   assert.doesNotMatch(JSON.stringify(rows), /secret|private-salt-must-stay-local/);
+});
+
+void test("frontend receipt sync calls reconcile after transaction recording", async () => {
+  const reconciled: string[] = [];
+  const receipt = await reconcileUntilReceipt({
+    transactionHash: TX_HASH,
+    claimId: CLAIM_ID,
+    reconcile: async (hash) => {
+      reconciled.push(hash);
+      return { status: "RECONCILED", receipt: receiptFixture() };
+    },
+    getReceipt: async () => {
+      throw new Error("receipt endpoint should not be needed when reconciliation returns a receipt");
+    },
+    wait: async () => undefined,
+  });
+
+  assert.equal(receipt.receiptId, RECEIPT_ID);
+  assert.deepEqual(reconciled, [TX_HASH]);
+});
+
+void test("temporary submit_claim indexing miss retries and later produces receipt", async () => {
+  const waits: number[] = [];
+  let attempts = 0;
+  const receipt = await reconcileUntilReceipt({
+    transactionHash: TX_HASH,
+    claimId: CLAIM_ID,
+    retryDelays: [0, 1500, 2500],
+    reconcile: async () => {
+      attempts += 1;
+      if (attempts < 3) {
+        throw new ApiRequestError(
+          "SUBMIT_CLAIM_NOT_FOUND",
+          "No successful submit_claim invocation was found for this transaction hash.",
+          404,
+          `/api/v1/transactions/${TX_HASH}/reconcile`,
+        );
+      }
+      return { status: "RECONCILED", receipt: receiptFixture() };
+    },
+    getReceipt: async () => receiptFixture(),
+    wait: async (ms) => {
+      waits.push(ms);
+    },
+  });
+
+  assert.equal(receipt.receiptId, RECEIPT_ID);
+  assert.equal(attempts, 3);
+  assert.deepEqual(waits, [1500, 2500]);
+});
+
+void test("successful reconciliation fetches the claim receipt when response omits receipt", async () => {
+  let receiptFetches = 0;
+  const receipt = await reconcileUntilReceipt({
+    transactionHash: TX_HASH,
+    claimId: CLAIM_ID,
+    reconcile: async () => ({
+      status: "RECONCILED",
+      transaction: {
+        id: "tx-record",
+        transactionHash: TX_HASH,
+        status: "CONFIRMED",
+        ledgerNumber: 3377274,
+        sourceAccount: TESTNET_ACCOUNT,
+        confirmedAt: "2026-07-01T10:18:06.000Z",
+      },
+    }),
+    getReceipt: async (claimId) => {
+      receiptFetches += 1;
+      assert.equal(claimId, CLAIM_ID);
+      return receiptFixture();
+    },
+    wait: async () => undefined,
+  });
+
+  assert.equal(receipt.receiptId, RECEIPT_ID);
+  assert.equal(receiptFetches, 1);
+});
+
+void test("failed Stellar transaction is not retried forever", async () => {
+  let attempts = 0;
+  await assert.rejects(
+    () =>
+      reconcileUntilReceipt({
+        transactionHash: TX_HASH,
+        claimId: CLAIM_ID,
+        retryDelays: [0, 1500, 2500],
+        reconcile: async () => {
+          attempts += 1;
+          return {
+            transaction: {
+              id: "tx-record",
+              transactionHash: TX_HASH,
+              status: "FAILED",
+              ledgerNumber: null,
+              sourceAccount: TESTNET_ACCOUNT,
+              confirmedAt: null,
+            },
+          };
+        },
+        getReceipt: async () => receiptFixture(),
+        wait: async () => undefined,
+      }),
+    /transaction as failed/,
+  );
+  assert.equal(attempts, 1);
+});
+
+void test("refresh-preserved pending receipt sync can resume from localStorage", () => {
+  const store = new Map<string, string>();
+  const previousWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+        removeItem: (key: string) => {
+          store.delete(key);
+        },
+      },
+    },
+  });
+
+  try {
+    writePendingReceiptSync({
+      schemaVersion: 1,
+      claimId: CLAIM_ID,
+      transactionHash: TX_HASH,
+      walletAddress: TESTNET_ACCOUNT,
+      ledger: "3377274",
+      contractId: "CD6MKUVXB7ZTZQCGNMBVHMU4PGT2SEKS6Z5LF53HXDOAVCO3LGKGQ3JU",
+      researcherCommitment:
+        "73fea8bfb67ac8c6a2bac808316c2750331983290be5e4e488e62361f8090b3b",
+      claimCommitment:
+        "cfa8caa9feef6e035354b47763dc50d1ffd7beefc63a6ced135a6f97dff2b980",
+      nullifier:
+        "0da1e0e0056857609cc20523e06ceb6a9a76304b6141f9c0c10a23c5bd2cd739",
+    });
+
+    const restored = readPendingReceiptSync(TESTNET_ACCOUNT);
+    assert.equal(restored?.claimId, CLAIM_ID);
+    assert.equal(restored?.transactionHash, TX_HASH);
+    assert.equal(restored?.walletAddress, TESTNET_ACCOUNT);
+    assert.equal(readPendingReceiptSync("GDIFFERENTWALLET"), null);
+
+    clearPendingReceiptSync();
+    assert.equal(readPendingReceiptSync(TESTNET_ACCOUNT), null);
+  } finally {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow,
+    });
+  }
 });
 
 void test("official ZeroSeal stamp renders confirmed receipt ledger and serial", () => {
@@ -713,6 +878,12 @@ function verifiedResult(): ApiVerificationResult {
       transaction: `https://stellar.expert/explorer/testnet/tx/${TX_HASH}`,
     },
   };
+}
+
+function receiptFixture(): ApiReceipt {
+  const receipt = verifiedResult().receipt;
+  assert.ok(receipt);
+  return receipt;
 }
 
 function createVerificationStateRecorder() {

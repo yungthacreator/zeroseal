@@ -108,6 +108,14 @@ export type ApiVerificationResult = {
   } | null;
 };
 
+export type ApiReconciliationResponse = {
+  status?: string;
+  transaction?: ApiTransaction | null;
+  claim?: ApiClaim | null;
+  receipt?: ApiReceipt | null;
+  invocation?: unknown;
+};
+
 export type ApiErrorState = {
   code: string;
   message: string;
@@ -276,6 +284,13 @@ export function getPublicReceipts() {
 
 export function getBackendTransaction(transactionHash: string) {
   return request<ApiTransaction>(`/api/v1/transactions/${transactionHash}`);
+}
+
+export function reconcileBackendTransaction(transactionHash: string) {
+  return request<ApiReconciliationResponse>(
+    `/api/v1/transactions/${encodeURIComponent(transactionHash)}/reconcile`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
 }
 
 export function verifyReceiptHref(receiptId: string) {
