@@ -312,7 +312,7 @@ function secureRandomHex(byteLength = 32): string {
   return hexFromBytes(bytes);
 }
 
-async function sha256Hex(value: string | Uint8Array): Promise<string> {
+export async function sha256Hex(value: string | Uint8Array): Promise<string> {
   const cryptoApi = globalThis.crypto;
   if (!cryptoApi?.subtle) {
     throw new Error("WebCrypto SHA-256 is unavailable.");

@@ -33,6 +33,7 @@ import {
   type PublicPayload,
 } from "@/lib/claim-flow";
 import { persistReceipt } from "@/lib/receipt-store";
+import { createIdempotencyKey } from "@/lib/idempotency";
 import {
   assertSubmitClaimSignedXdrReady,
   createClaimRegistryClient,
@@ -1444,7 +1445,13 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
       researcherCommitment: transaction.review.researcherCommitment,
       claimCommitment: transaction.review.claimCommitment,
       nullifier: transaction.review.nullifier,
-      idempotencyKey: `submit_claim:${transaction.transactionHash}`,
+      idempotencyKey: await createIdempotencyKey("claim_transaction", [
+        transaction.claimId,
+        address,
+        transaction.transactionHash,
+        transaction.review.contractId,
+        transaction.review.claimCommitment,
+      ]),
     });
 
     let transactionRecord = await getBackendTransaction(transaction.transactionHash);
@@ -1626,6 +1633,13 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
         address,
         seal.researcherFingerprint,
       );
+      const claimIdempotencyKey = await createIdempotencyKey("claim_submission", [
+        seal.claimIdentifier,
+        address,
+        seal.canonicalClaimHash,
+        researcherCommitment,
+        seal.nullifier,
+      ]);
       const claim =
         backendClaim?.researcherCommitment === researcherCommitment
           ? backendClaim
@@ -1635,7 +1649,7 @@ export function ClaimWizard({ mode }: { mode: WizardMode }) {
               nullifier: seal.nullifier,
               evidenceCommitment: seal.privateEvidenceDigest,
               publicInputs: publicInputRows(seal, researcherCommitment),
-              idempotencyKey: `${seal.claimIdentifier}:${address}:${researcherCommitment}`,
+              idempotencyKey: claimIdempotencyKey,
             });
       setBackendClaim(claim);
 

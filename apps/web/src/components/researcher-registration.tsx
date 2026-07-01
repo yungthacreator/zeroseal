@@ -37,6 +37,7 @@ import {
   readReceipt,
   type StoredReceipt,
 } from "@/lib/receipt-store";
+import { createIdempotencyKey } from "@/lib/idempotency";
 
 type SubmissionState =
   | "idle"
@@ -425,18 +426,21 @@ export function ResearcherRegistration() {
 
     try {
       setBackendMessage("Creating persistent claim.");
+      const idempotencyKey = await createIdempotencyKey(
+        "researcher_registration_claim",
+        [
+          address,
+          loadedArtifact.commitment,
+          loadedArtifact.nullifier,
+        ],
+      );
       const claim = await createBackendClaim({
         walletAddress: address,
         researcherCommitment: loadedArtifact.commitment,
         nullifier: loadedArtifact.nullifier,
         evidenceCommitment: evidenceCommitment ?? undefined,
         publicInputs: loadedArtifact.publicInputs,
-        idempotencyKey: [
-          "security-impact",
-          address,
-          loadedArtifact.commitment,
-          loadedArtifact.nullifier,
-        ].join(":"),
+        idempotencyKey,
       });
 
       setClaimId(claim.id);
@@ -1161,7 +1165,10 @@ export function ResearcherRegistration() {
               method: "register_researcher",
               operationType: "researcher_registration",
               researcherCommitment: normalizedCommitment,
-              idempotencyKey: `register_researcher:${hash}`,
+              idempotencyKey: await createIdempotencyKey(
+                "researcher_registration_transaction",
+                [backendClaimId, address, hash, registryContractId],
+              ),
             });
             setClaimStatus(recorded.status);
             setBackendMessage("Transaction recorded for reconciliation.");
